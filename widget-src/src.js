@@ -424,7 +424,11 @@
       const res = await fetch(`${cfg.apiUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, websiteId: cfg.websiteId }),
+        body: JSON.stringify({
+          message: text,
+          websiteId: cfg.websiteId,
+          history: messages.slice(-6).map((m) => ({ role: m.role === "bot" ? "assistant" : "user", content: m.text })),
+        }),
       });
       const data = await res.json();
 
