@@ -9,20 +9,16 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
-const SIMILARITY_THRESHOLD = 0.45; // raised: only escalate when genuinely no match
+// Lower threshold so real questions match; greetings are excluded separately
+const SIMILARITY_THRESHOLD = 0.32;
 const TOP_K = 3;
 
-// Greetings / small-talk patterns that should never trigger contact form escalation
-const GREETING_PATTERNS = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
-const SMALL_TALK_PATTERNS = /^(how are you|how do you do|nice to meet|thanks|thank you|ok|okay|sure|great|cool|awesome|bye|goodbye|see you|cheers)\b/i;
+// These patterns bypass vector search entirely — always answer confidently
+const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
+const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you|ok|okay|sure|great|cool|awesome|bye|goodbye|see you|cheers)\b/i;
 
-/**
- * POST /api/chat
- * Body: { message, websiteId, history?, contactUrl? }
- * Response: { answer, source, confident, contactUrl? }
- */
 router.post("/", async (req, res) => {
-  const { message, websiteId, history = [], contactUrl } = req.body;
+  const { message, websiteId, history = [] } = req.body;
 
   if (!message || !websiteId) {
     return res.status(400).json({ error: "message and websiteId are required." });
@@ -30,8 +26,8 @@ router.post("/", async (req, res) => {
 
   const trimmed = message.trim();
 
-  // Handle greetings and small talk without touching the vector DB
-  if (GREETING_PATTERNS.test(trimmed) || SMALL_TALK_PATTERNS.test(trimmed)) {
+  // Greetings / small-talk: never escalate, never touch DB
+  if (GREETING_RE.test(trimmed) || SMALL_TALK_RE.test(trimmed)) {
     return res.json({
       answer: "Hello! I'm here to help you with any questions about this website. What would you like to know?",
       source: null,
@@ -59,14 +55,12 @@ router.post("/", async (req, res) => {
     const topScore = ranked[0].score;
     const confident = topScore >= SIMILARITY_THRESHOLD;
 
-    // Derive the site's base URL from the first chunk's URL (for contact escalation)
-    let siteBaseUrl = contactUrl || null;
-    if (!siteBaseUrl && chunks[0]?.url) {
-      try {
-        const u = new URL(chunks[0].url);
-        siteBaseUrl = u.origin;
-      } catch { /* ignore */ }
-    }
+    // Always derive siteBaseUrl from stored chunks — no need for client to send it
+    let siteBaseUrl = null;
+    try {
+      const u = new URL(chunks[0].url);
+      siteBaseUrl = u.origin;
+    } catch { /* ignore */ }
 
     const context = ranked
       .map((c, i) => `[Source ${i + 1}: ${c.url}]\n${c.content}`)
@@ -79,14 +73,14 @@ router.post("/", async (req, res) => {
 
     const systemPrompt = confident
       ? `You are a helpful assistant for this website. Answer using ONLY the context below.
-Be concise, friendly, and plain-text only — no markdown formatting, no bullet asterisks, no [text](url) links.
-If you mention a page or source, just say the page name naturally.
+Be concise and friendly. Plain text only — no markdown, no asterisks, no [text](url) links, no bullet points.
+Write in short paragraphs. If you reference a page, mention its name naturally in the sentence.
 
 CONTEXT:
 ${context}`
-      : `You are a helpful assistant. No relevant information was found on this website for the user's question.
-Respond with a single short sentence: acknowledge you don't have that info, and suggest they visit the contact page for help.
-Plain text only, no markdown, no links.`;
+      : `You are a helpful assistant. No relevant content was found for this question.
+Write ONE short plain sentence only: say you couldn't find that information and suggest they get in touch.
+No markdown, no links, no contact URL — just the plain sentence.`;
 
     const completion = await getGroq().chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -99,7 +93,6 @@ Plain text only, no markdown, no links.`;
     });
 
     const rawAnswer = completion.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
-    // Strip any residual markdown the model still outputs
     const answer = stripMarkdown(rawAnswer);
     const source = confident ? ranked[0].url : null;
 
@@ -107,7 +100,8 @@ Plain text only, no markdown, no links.`;
       answer,
       source,
       confident,
-      ...((!confident && siteBaseUrl) ? { contactUrl: siteBaseUrl + "/contact" } : {}),
+      // Widget uses this to show the Contact Us button — model never sees this URL
+      ...(!confident && siteBaseUrl ? { contactUrl: siteBaseUrl + "/contact" } : {}),
     });
 
   } catch (err) {
@@ -116,21 +110,17 @@ Plain text only, no markdown, no links.`;
   }
 });
 
-/**
- * Strip common markdown so the widget always renders plain readable text.
- */
 function stripMarkdown(text) {
   return text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")   // [text](url) → text
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")  // images
-    .replace(/^#{1,6}\s+/gm, "")               // headings
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")        // bold
-    .replace(/(\*|_)(.*?)\1/g, "$2")           // italic
-    .replace(/`{1,3}[^`]*`{1,3}/g, (m) =>     // inline code — keep text
-      m.replace(/`/g, ""))
-    .replace(/^\s*[-*+]\s+/gm, "• ")           // bullets → •
-    .replace(/^\s*\d+\.\s+/gm, "")             // numbered lists
-    .replace(/\n{3,}/g, "\n\n")                // excess newlines
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")  // [text](url) → text
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // images
+    .replace(/^#{1,6}\s+/gm, "")              // headings
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")       // bold
+    .replace(/(\*|_)(.*?)\1/g, "$2")          // italic
+    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")   // code
+    .replace(/^\s*[-*+]\s+/gm, "• ")          // bullets → •
+    .replace(/^\s*\d+\.\s+/gm, "")            // numbered lists
+    .replace(/\n{3,}/g, "\n\n")               // excess newlines
     .trim();
 }
 
