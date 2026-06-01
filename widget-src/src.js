@@ -1,5 +1,6 @@
-(function () {
-  "use strict";
+(function(){
+try {
+"use strict";
 
   // ─── Default config ────────────────────────────────────────────────
   const DEFAULTS = {
@@ -292,7 +293,22 @@
 
   // ─── Init ──────────────────────────────────────────────────────────
   function init(userConfig) {
-    cfg = Object.assign({}, DEFAULTS, userConfig);
+    try {
+      cfg = Object.assign({}, DEFAULTS, userConfig);
+      // Wait for DOM to be ready before inserting widget
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function() {
+          try { _mount(); } catch(e) { console.warn("[ChatWidget] Init error:", e); }
+        });
+      } else {
+        _mount();
+      }
+    } catch(e) {
+      console.warn("[ChatWidget] Init error:", e);
+    }
+  }
+
+  function _mount() {
     injectCSS();
     buildDOM();
     addListeners();
@@ -302,7 +318,7 @@
   function injectCSS() {
     const style = document.createElement("style");
     style.textContent = CSS.replace(/var\(--cw-primary\)/g, cfg.primaryColor);
-    document.head.appendChild(style);
+    (document.head || document.documentElement).appendChild(style);
   }
 
   // ─── Build DOM ─────────────────────────────────────────────────────
@@ -567,4 +583,5 @@
 
   // ─── Expose global API ─────────────────────────────────────────────
   window.ChatWidget = { init };
+} catch(e) { console.warn("[ChatWidget] Failed to load:", e); }
 })();
