@@ -7,8 +7,7 @@ import Chunk from "./models/Chunk.js";
 const CHUNK_SIZE = 400;
 const CHUNK_OVERLAP = 50;
 const MAX_PAGES = 50;
-// If axios fetch yields fewer than this many content chars, it's likely a JS-rendered SPA
-const SPA_THRESHOLD = 200;
+const SPA_THRESHOLD = 300; // chars of visible text — below this, try Puppeteer
 
 // ─── Link extraction ────────────────────────────────────────────────────────
 function extractLinks($, baseUrl) {
@@ -27,24 +26,43 @@ function extractLinks($, baseUrl) {
   return [...links];
 }
 
-// ─── Text extraction from parsed HTML ──────────────────────────────────────
+// ─── Text extraction ────────────────────────────────────────────────────────
+// Strategy: remove only pure noise (scripts/styles/media), keep structural
+// elements because React apps put real content inside header/nav/footer too.
 function extractText($) {
-  $("script, style, nav, footer, header, noscript, iframe, img, svg").remove();
+  // Remove only truly non-content elements
+  $("script, style, noscript, iframe, img, svg, canvas, video, audio").remove();
+
   const title = $("title").text().trim() || $("h1").first().text().trim();
-  const selectors = ["main", "article", ".content", ".post", "#content", "#root", "body"];
-  let rawText = "";
-  for (const sel of selectors) {
-    const el = $(sel);
-    if (el.length && el.text().trim().length > 50) {
-      rawText = el.text();
-      break;
+
+  // Collect all meaningful text-bearing elements in document order
+  const textParts = [];
+  $(
+    "h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption, label, " +
+    "span, div, section, article, main, header, footer, nav, a"
+  ).each((_, el) => {
+    const $el = $(el);
+    // Skip elements whose children are also in our selector (avoid duplicating)
+    // Only collect leaf-ish nodes: elements with direct text content
+    const ownText = $el.clone().children().remove().end().text().trim();
+    if (ownText.length > 15) {
+      textParts.push(ownText);
     }
-  }
-  const text = rawText.replace(/\s+/g, " ").trim();
+  });
+
+  // Deduplicate (React renders same text in parent + child nodes)
+  const seen = new Set();
+  const deduped = textParts.filter(t => {
+    if (seen.has(t)) return false;
+    seen.add(t);
+    return true;
+  });
+
+  const text = deduped.join(" ").replace(/\s+/g, " ").trim();
   return { title, text };
 }
 
-// ─── Chunk text into overlapping word windows ──────────────────────────────
+// ─── Chunk text ─────────────────────────────────────────────────────────────
 function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   const words = text.split(" ").filter(Boolean);
   const chunks = [];
@@ -56,21 +74,24 @@ function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   return chunks;
 }
 
-// ─── Fetch with axios (fast path) ──────────────────────────────────────────
+// ─── Axios fetch (fast path for static sites) ───────────────────────────────
 async function fetchWithAxios(url) {
-  const response = await axios.get(url, {
-    timeout: 10000,
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; ChatBot-Scraper/1.0)" },
+  const res = await axios.get(url, {
+    timeout: 15000,
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+    },
   });
-  return response.data;
+  return res.data;
 }
 
-// ─── Fetch with Puppeteer (JS-rendered SPA fallback) ──────────────────────
+// ─── Puppeteer fetch (for React / Next.js / Vue / Angular SPAs) ─────────────
 let _browser = null;
 
 async function getBrowser() {
   if (_browser) return _browser;
-  // Dynamic import so the module loads even if puppeteer isn't installed
   const puppeteer = await import("puppeteer").then(m => m.default || m);
   _browser = await puppeteer.launch({
     headless: "new",
@@ -80,7 +101,9 @@ async function getBrowser() {
       "--disable-dev-shm-usage",
       "--disable-gpu",
       "--no-zygote",
-      "--single-process",        // required for Render free tier
+      "--single-process",
+      "--disable-extensions",
+      "--disable-background-networking",
     ],
   });
   return _browser;
@@ -90,26 +113,51 @@ async function fetchWithPuppeteer(url) {
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setUserAgent("Mozilla/5.0 (compatible; ChatBot-Scraper/1.0)");
-    // Block images/fonts/media to speed up scraping
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+    );
+
+    // Block media and fonts — but ALLOW stylesheets so React renders properly
     await page.setRequestInterception(true);
     page.on("request", (req) => {
-      if (["image", "stylesheet", "font", "media"].includes(req.resourceType())) {
+      const type = req.resourceType();
+      if (["image", "font", "media"].includes(type)) {
         req.abort();
       } else {
         req.continue();
       }
     });
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-    // Extra wait for React/Vue hydration
-    await new Promise(r => setTimeout(r, 1500));
+
+    // Use domcontentloaded + extra wait instead of networkidle2
+    // networkidle2 often never fires on Next.js / apps with background polling
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+
+    // Wait for the page to actually render content:
+    // 1. Wait for at least one meaningful text element to appear
+    try {
+      await page.waitForFunction(
+        () => {
+          const els = document.querySelectorAll("h1, h2, h3, p, li, article, main, section");
+          const totalText = Array.from(els).map(e => e.innerText || "").join(" ").trim();
+          return totalText.length > 100;
+        },
+        { timeout: 8000 }
+      );
+    } catch {
+      // If it never gets 100 chars of headings/paragraphs, just wait fixed time
+      await new Promise(r => setTimeout(r, 3000));
+    }
+
+    // Small buffer for any remaining hydration (lazy-loaded sections etc.)
+    await new Promise(r => setTimeout(r, 1000));
+
     return await page.content();
   } finally {
     await page.close();
   }
 }
 
-// ─── Smart fetch: try axios first, fall back to Puppeteer for SPAs ────────
+// ─── Smart fetch: axios first, Puppeteer if it looks like a SPA ─────────────
 async function smartFetch(url) {
   let html;
   let usedPuppeteer = false;
@@ -120,7 +168,7 @@ async function smartFetch(url) {
     const { text } = extractText($);
 
     if (text.length < SPA_THRESHOLD) {
-      console.log(`   ⚡ SPA detected (${text.length} chars), switching to Puppeteer…`);
+      console.log(`   ⚡ SPA detected (only ${text.length} chars), switching to Puppeteer…`);
       html = await fetchWithPuppeteer(url);
       usedPuppeteer = true;
     }
@@ -133,7 +181,7 @@ async function smartFetch(url) {
   return { html, usedPuppeteer };
 }
 
-// ─── Main export ───────────────────────────────────────────────────────────
+// ─── Main scrape + index function ───────────────────────────────────────────
 export async function scrapeAndIndex(startUrl, websiteId) {
   await Chunk.deleteMany({ websiteId });
   console.log(`🗑️  Cleared old chunks for: ${websiteId}`);
@@ -141,7 +189,7 @@ export async function scrapeAndIndex(startUrl, websiteId) {
   const visited = new Set();
   const queue = [startUrl];
   let chunksStored = 0;
-  let puppeteerMode = false; // once we know it's a SPA, stay in puppeteer mode
+  let puppeteerMode = false;
 
   while (queue.length > 0 && visited.size < MAX_PAGES) {
     const url = queue.shift();
@@ -153,12 +201,11 @@ export async function scrapeAndIndex(startUrl, websiteId) {
     let html;
     try {
       if (puppeteerMode) {
-        // Already confirmed SPA — go straight to Puppeteer for remaining pages
         html = await fetchWithPuppeteer(url);
       } else {
         const result = await smartFetch(url);
         html = result.html;
-        if (result.usedPuppeteer) puppeteerMode = true; // stay in puppeteer for rest of site
+        if (result.usedPuppeteer) puppeteerMode = true;
       }
     } catch (err) {
       console.warn(`⚠️  Failed to fetch ${url}: ${err.message}`);
@@ -168,12 +215,14 @@ export async function scrapeAndIndex(startUrl, websiteId) {
     const $ = cheerio.load(html);
     const { title, text } = extractText($);
 
-    if (text.length < 100) {
-      console.log(`   ↩ Skipping (too little content after render)`);
+    console.log(`   📄 Extracted ${text.length} chars from "${title}"`);
+
+    if (text.length < 80) {
+      console.log(`   ↩ Skipping — too little content even after render`);
       continue;
     }
 
-    // Enqueue new internal links
+    // Discover and enqueue internal links
     const links = extractLinks($, url);
     for (const link of links) {
       if (!visited.has(link)) queue.push(link);
@@ -181,7 +230,7 @@ export async function scrapeAndIndex(startUrl, websiteId) {
 
     // Chunk → embed → store
     const chunks = chunkText(text);
-    console.log(`   ✂️  ${chunks.length} chunks from "${title}"`);
+    console.log(`   ✂️  ${chunks.length} chunks`);
 
     for (const chunkContent of chunks) {
       const embedding = await getEmbedding(chunkContent);
@@ -190,7 +239,6 @@ export async function scrapeAndIndex(startUrl, websiteId) {
     }
   }
 
-  // Clean up Puppeteer browser to free memory
   if (_browser) {
     await _browser.close();
     _browser = null;
