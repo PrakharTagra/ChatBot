@@ -41,7 +41,7 @@ cp .env.example .env   # fill in MONGO_URI and GROQ_API_KEY
 npm run dev
 ```
 
-Server runs at `https://chatbot-gurp.onrender.com`
+Server runs at `http://localhost:5000`
 
 ### 2. Frontend (Admin Dashboard)
 
@@ -113,11 +113,11 @@ Remove a site and all its data.
 
 ```html
 <!-- Add before </body> -->
-<script src="https://chatbot-gurp.onrender.com/widget/chat-widget.js"></script>
+<script src="https://yourdomain.com/widget/chat-widget.js"></script>
 <script>
   ChatWidget.init({
     websiteId: "your-site-id",       // from admin dashboard
-    apiUrl: "https://chatbot-gurp.onrender.com", // your deployed backend URL
+    apiUrl: "https://yourdomain.com", // your deployed backend URL
     title: "Website Assistant",       // optional
     welcomeMessage: "Hi! How can I help?", // optional
     primaryColor: "#6c63ff",          // optional

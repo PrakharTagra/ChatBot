@@ -1,4 +1,4 @@
-(()=>{(function(){"use strict";let h={websiteId:"default",apiUrl:"https://chatbot-gurp.onrender.com",title:"Website Assistant",welcomeMessage:"\u{1F44B} Hi! I can answer questions about this website. What would you like to know?",primaryColor:"#6c63ff",position:"bottom-right"},r=Object.assign({},h),I=`
+(()=>{(function(){"use strict";let h={websiteId:"default",apiUrl:"http://localhost:5000",title:"Website Assistant",welcomeMessage:"\u{1F44B} Hi! I can answer questions about this website. What would you like to know?",primaryColor:"#6c63ff",position:"bottom-right"},r=Object.assign({},h),I=`
     .cw-launcher {
       position: fixed;
       width: 56px;

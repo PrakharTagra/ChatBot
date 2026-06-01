@@ -117,7 +117,7 @@
   <div id="setup-banner">
     ⚠️ <strong>Open this page via the backend server, not as a local file.</strong><br>
     Run <code>cd backend &amp;&amp; npm run dev</code> then visit
-    <code>https://chatbot-gurp.onrender.com/widget/test.html</code> in your browser.
+    <code>http://localhost:5000/widget/test.html</code> in your browser.
     Direct file:// access blocks all API calls.
   </div>
 
@@ -171,7 +171,7 @@
     <label>Website ID</label>
     <input id="cfg-websiteId" value="demo-site" />
     <label>API URL</label>
-    <input id="cfg-apiUrl" value="https://chatbot-gurp.onrender.com" />
+    <input id="cfg-apiUrl" value="http://localhost:5000" />
     <label>Primary Color</label>
     <input id="cfg-color" value="#6c63ff" />
     <button onclick="reloadWidget()">Reload Widget</button>
@@ -219,7 +219,7 @@
     // ── Initial widget load ───────────────────────────────────────────
     ChatWidget.init({
       websiteId:      'demo-site',
-      apiUrl:         'https://chatbot-gurp.onrender.com',
+      apiUrl:         'http://localhost:5000',
       title:          'Website Assistant',
       welcomeMessage: '👋 Hi! Ask me anything about this website.'
     });

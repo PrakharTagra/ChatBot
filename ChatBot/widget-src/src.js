@@ -4,7 +4,7 @@
   // ─── Default config ────────────────────────────────────────────────
   const DEFAULTS = {
     websiteId: "default",
-    apiUrl: "https://chatbot-gurp.onrender.com",
+    apiUrl: "http://localhost:5000",
     title: "Website Assistant",
     welcomeMessage: "👋 Hi! I can answer questions about this website. What would you like to know?",
     primaryColor: "#6c63ff",
