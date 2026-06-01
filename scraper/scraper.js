@@ -1,8 +1,8 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { URL } from "url";
-import { getEmbedding } from "../backend/utils/embeddings.js";
-import Chunk from "../backend/models/Chunk.js";
+import { getEmbedding } from "./utils/embeddings.js";
+import Chunk from "./models/Chunk.js";
 
 const CHUNK_SIZE = 400;      // target words per chunk
 const CHUNK_OVERLAP = 50;    // words to overlap between chunks
