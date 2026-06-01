@@ -92,20 +92,19 @@ let _browser = null;
 
 async function getBrowser() {
   if (_browser) return _browser;
-  const puppeteer = await import("puppeteer").then(m => m.default || m);
+
+  // puppeteer-core + @sparticuz/chromium = prebuilt Chromium that works on
+  // Render, Lambda, and other cloud Linux envs without system dependencies
+  const puppeteer = await import("puppeteer-core").then(m => m.default || m);
+  const chromium  = await import("@sparticuz/chromium").then(m => m.default || m);
+
   _browser = await puppeteer.launch({
-    headless: "new",
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--no-zygote",
-      "--single-process",
-      "--disable-extensions",
-      "--disable-background-networking",
-    ],
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
   });
+
   return _browser;
 }
 

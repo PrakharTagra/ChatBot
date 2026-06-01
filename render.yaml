@@ -12,7 +12,3 @@ services:
         sync: false
       - key: PORT
         value: 10000
-      - key: PUPPETEER_CACHE_DIR
-        value: /opt/render/project/.cache/puppeteer
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: false
