@@ -83,11 +83,17 @@ export default function ManageSite() {
     }
   }
 
-  const embedSnippet = `<script src="${API}/widget/chat-widget.js"></script>
-<script>
-  ChatWidget.init({
-    websiteId: "${websiteId}",
-    apiUrl: "${API}"
+  const embedSnippet = `<!-- ChatAgent Widget -->
+<script src="${API}/widget/chat-widget.js" defer></script>
+<script defer>
+  document.addEventListener("DOMContentLoaded", function() {
+    ChatWidget.init({
+      websiteId: "${websiteId}",
+      apiUrl: "${API}",
+      title: "Website Assistant",
+      welcomeMessage: "👋 Hi! I can answer questions about this website. What would you like to know?",
+      primaryColor: "#6c63ff"
+    });
   });
 </script>`
 
@@ -142,14 +148,20 @@ export default function ManageSite() {
 
             <div className="divider" />
             <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Advanced Options</h4>
-            <pre className="code-block">{`ChatWidget.init({
-  websiteId: "${websiteId}",
-  apiUrl: "${API}",
-  title: "Website Assistant",          // Chat header title
-  welcomeMessage: "Hi! How can I help?", // Opening message
-  primaryColor: "#6c63ff",             // Widget accent color
-  position: "bottom-right"             // or "bottom-left"
-});`}</pre>
+            <pre className="code-block">{`<!-- ChatAgent Widget -->
+<script src="${API}/widget/chat-widget.js" defer></script>
+<script defer>
+  document.addEventListener("DOMContentLoaded", function() {
+    ChatWidget.init({
+      websiteId: "${websiteId}",
+      apiUrl: "${API}",
+      title: "Website Assistant",
+      welcomeMessage: "Hi! How can I help?",
+      primaryColor: "#6c63ff",
+      position: "bottom-right"
+    });
+  });
+</script>`}</pre>
           </div>
         )}
 

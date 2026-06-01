@@ -66,14 +66,16 @@ export default function RegisterSite() {
   }
 
   const embedSnippet = `<!-- ChatAgent Widget -->
-<script src="${API}/widget/chat-widget.js"></script>
-<script>
-  ChatWidget.init({
-    websiteId: "${websiteId}",
-    apiUrl: "${API}",
-    title: "${title || 'Website Assistant'}",
-    welcomeMessage: "${welcomeMsg}",
-    primaryColor: "${primaryColor}"
+<script src="${API}/widget/chat-widget.js" defer></script>
+<script defer>
+  document.addEventListener("DOMContentLoaded", function() {
+    ChatWidget.init({
+      websiteId: "${websiteId}",
+      apiUrl: "${API}",
+      title: "${title || 'Website Assistant'}",
+      welcomeMessage: "${welcomeMsg}",
+      primaryColor: "${primaryColor}"
+    });
   });
 </script>`
 
