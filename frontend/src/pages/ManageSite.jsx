@@ -13,6 +13,7 @@ export default function ManageSite() {
   const [leads, setLeads] = useState([])
   const [leadsLoading, setLeadsLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [backendOk, setBackendOk] = useState(null) // null=checking, true=ok, false=down
 
   // Re-scrape state
   const [newUrl, setNewUrl] = useState('')
@@ -22,19 +23,31 @@ export default function ManageSite() {
 
   // Live test chat
   const [chatMessages, setChatMessages] = useState([
-    { role: 'bot', text: `👋 Hi! Ask me anything and I'll search the content indexed for "${websiteId}".` }
+    { role: 'bot', text: `👋 Hi! Ask me anything — I'll search the indexed content for "${websiteId}".` }
   ])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const chatEndRef = useRef(null)
+  // Keep a ref of messages for history so sendChatMessage always has the latest
+  const chatHistoryRef = useRef([])
 
   useEffect(() => {
     if (tab === 'leads') fetchLeads()
+    if (tab === 'test' && backendOk === null) checkBackend()
   }, [tab])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
+
+  async function checkBackend() {
+    try {
+      await axios.get(`${API}/api/health`, { timeout: 5000 })
+      setBackendOk(true)
+    } catch {
+      setBackendOk(false)
+    }
+  }
 
   async function fetchLeads() {
     setLeadsLoading(true)
@@ -64,20 +77,45 @@ export default function ManageSite() {
     const msg = chatInput.trim()
     if (!msg || chatLoading) return
     setChatInput('')
-    setChatMessages(prev => [...prev, { role: 'user', text: msg }])
+
+    const userMsg = { role: 'user', text: msg }
+    setChatMessages(prev => [...prev, userMsg])
+
+    // Build history from ref (excludes the welcome message)
+    const history = chatHistoryRef.current.map(m => ({
+      role: m.role === 'bot' ? 'assistant' : 'user',
+      content: m.text
+    }))
+    chatHistoryRef.current = [...chatHistoryRef.current, userMsg]
+
     setChatLoading(true)
     try {
-      const res = await axios.post(`${API}/api/chat`, { message: msg, websiteId })
-      const { answer, source, confident } = res.data
-      setChatMessages(prev => [...prev, {
+      const res = await axios.post(`${API}/api/chat`, {
+        message: msg,
+        websiteId,
+        history: history.slice(-6)
+      })
+      const { answer, source, confident, contactUrl } = res.data
+
+      // Show clean source path, not full URL
+      let sourceLabel = null
+      if (source) {
+        try { sourceLabel = new URL(source).pathname || source } catch { sourceLabel = source }
+      }
+
+      const botMsg = {
         role: 'bot',
         text: answer,
         source,
+        sourceLabel,
         confident,
-        label: confident ? null : 'Low confidence — contact form would appear'
-      }])
+        contactUrl,
+      }
+      setChatMessages(prev => [...prev, botMsg])
+      chatHistoryRef.current = [...chatHistoryRef.current, { role: 'bot', text: answer }]
     } catch (e) {
-      setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Error: ' + (e.response?.data?.error || e.message) }])
+      const errMsg = { role: 'bot', text: '❌ Error: ' + (e.response?.data?.error || e.message) }
+      setChatMessages(prev => [...prev, errMsg])
     } finally {
       setChatLoading(false)
     }
@@ -171,9 +209,11 @@ export default function ManageSite() {
             <div className="tab-header">
               <div>
                 <h3>Live Chat Test</h3>
-                <p>Test the AI responses directly here before embedding on a site.</p>
+                <p>Test AI responses against the indexed content for <strong>{websiteId}</strong>.</p>
               </div>
-              <span className="badge badge-green">● Connected</span>
+              {backendOk === null && <span className="badge" style={{ background: 'var(--bg3)', color: 'var(--text2)' }}>⏳ Checking…</span>}
+              {backendOk === true && <span className="badge badge-green">● Connected</span>}
+              {backendOk === false && <span className="badge" style={{ background: '#3d1a1a', color: '#f87171' }}>● Backend down</span>}
             </div>
 
             <div className="chat-window">
@@ -181,12 +221,24 @@ export default function ManageSite() {
                 <div key={i} className={`chat-msg chat-msg--${m.role}`}>
                   <div className="chat-bubble">
                     {m.text}
-                    {m.source && (
+                    {m.sourceLabel && (
                       <a href={m.source} target="_blank" rel="noopener noreferrer" className="chat-source">
-                        🔗 {m.source}
+                        🔗 {m.sourceLabel}
                       </a>
                     )}
-                    {m.label && <div className="chat-label">{m.label}</div>}
+                    {m.contactUrl && (
+                      <div style={{ marginTop: 8 }}>
+                        <a href={m.contactUrl} target="_blank" rel="noopener noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                            background: 'var(--accent)', color: '#fff', borderRadius: 20,
+                            fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                          ✉️ Contact Us
+                        </a>
+                      </div>
+                    )}
+                    {m.confident === false && !m.contactUrl && (
+                      <div className="chat-label">⚠️ Low confidence — widget would show Contact Us button</div>
+                    )}
                   </div>
                 </div>
               ))}
