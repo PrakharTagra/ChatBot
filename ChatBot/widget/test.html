@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Widget Test Page</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f0f8;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    /* ── Setup warning banner ── */
+    #setup-banner {
+      display: none;
+      background: #fff3cd;
+      border-bottom: 2px solid #f0a500;
+      padding: 14px 24px;
+      font-size: 14px;
+      color: #7a4f00;
+      text-align: center;
+      line-height: 1.6;
+    }
+    #setup-banner strong { font-weight: 700; }
+    #setup-banner code {
+      background: rgba(0,0,0,0.08);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+
+    /* ── Status pill ── */
+    #status-bar {
+      background: #fff;
+      border-bottom: 1px solid #e0e0ee;
+      padding: 10px 40px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #555;
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .dot-checking { background: #ccc; animation: pulse 1s infinite; }
+    .dot-ok  { background: #1D9E75; }
+    .dot-err { background: #E24B4A; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e0e0ee;
+      padding: 18px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { font-size: 20px; font-weight: 800; color: #6c63ff; }
+    nav a { color: #555; text-decoration: none; margin-left: 24px; font-size: 14px; }
+    nav a:hover { color: #6c63ff; }
+
+    .hero { text-align: center; padding: 80px 20px 60px; }
+    .hero h1 { font-size: 42px; font-weight: 800; color: #1a1a2e; margin-bottom: 16px; }
+    .hero p { font-size: 17px; color: #666; max-width: 520px; margin: 0 auto 32px; line-height: 1.6; }
+    .hero-btn {
+      display: inline-block; background: #6c63ff; color: #fff;
+      padding: 14px 32px; border-radius: 10px; font-weight: 700;
+      text-decoration: none; font-size: 15px;
+    }
+
+    .features {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 24px; max-width: 860px; margin: 0 auto 60px; padding: 0 20px;
+    }
+    .feature-card {
+      background: #fff; border-radius: 12px;
+      padding: 28px 24px; border: 1px solid #e8e8f0;
+    }
+    .feature-icon { font-size: 28px; margin-bottom: 12px; }
+    .feature-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: #1a1a2e; }
+    .feature-card p { font-size: 14px; color: #666; line-height: 1.6; }
+
+    footer {
+      text-align: center; padding: 28px; color: #aaa;
+      font-size: 13px; border-top: 1px solid #e0e0ee; background: #fff;
+    }
+
+    .config-panel {
+      position: fixed; top: 120px; left: 16px;
+      background: #fff; border: 1px solid #ddd; border-radius: 12px;
+      padding: 16px; width: 220px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1); font-size: 13px; z-index: 100;
+    }
+    .config-panel h4 {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #888; margin-bottom: 12px;
+    }
+    .config-panel label { display: block; margin-bottom: 4px; font-weight: 600; color: #333; }
+    .config-panel input {
+      width: 100%; padding: 6px 10px; border: 1px solid #ddd;
+      border-radius: 6px; margin-bottom: 10px; font-size: 12px; font-family: monospace;
+    }
+    .config-panel button {
+      width: 100%; background: #6c63ff; color: #fff; border: none;
+      border-radius: 6px; padding: 8px; font-weight: 700; cursor: pointer; font-size: 13px;
+    }
+    .config-panel button:hover { opacity: 0.88; }
+    .config-panel .hint { font-size: 11px; color: #aaa; margin-top: 8px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+  <!-- Warning: shown if opened as file:// -->
+  <div id="setup-banner">
+    ⚠️ <strong>Open this page via the backend server, not as a local file.</strong><br>
+    Run <code>cd backend &amp;&amp; npm run dev</code> then visit
+    <code>http://localhost:5000/widget/test.html</code> in your browser.
+    Direct file:// access blocks all API calls.
+  </div>
+
+  <!-- Live backend status indicator -->
+  <div id="status-bar">
+    <span class="dot dot-checking" id="status-dot"></span>
+    <span id="status-text">Checking backend connection…</span>
+  </div>
+
+  <header>
+    <div class="logo">⚡ DemoCompany</div>
+    <nav>
+      <a href="#">Services</a>
+      <a href="#">About</a>
+      <a href="#">Pricing</a>
+      <a href="#">Contact</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <h1>AI Chat Agent<br>Test Page</h1>
+    <p>This page simulates a client's website. The chat widget in the bottom-right corner is powered by your backend. Click it and ask anything!</p>
+    <a href="#" class="hero-btn">Get Started</a>
+  </div>
+
+  <div class="features">
+    <div class="feature-card">
+      <div class="feature-icon">🤖</div>
+      <h3>AI-Powered Answers</h3>
+      <p>Answers questions using content scraped from your actual website.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📋</div>
+      <h3>Smart Escalation</h3>
+      <p>When the bot can't answer, it shows a contact form and captures the lead.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔌</div>
+      <h3>Easy Embed</h3>
+      <p>One script tag is all it takes to add the widget to any website.</p>
+    </div>
+  </div>
+
+  <footer>
+    This is a test page. The chat widget in the bottom-right corner is your embeddable ChatAgent widget.
+  </footer>
+
+  <!-- Dev config panel -->
+  <div class="config-panel">
+    <h4>🛠 Widget Config</h4>
+    <label>Website ID</label>
+    <input id="cfg-websiteId" value="demo-site" />
+    <label>API URL</label>
+    <input id="cfg-apiUrl" value="http://localhost:5000" />
+    <label>Primary Color</label>
+    <input id="cfg-color" value="#6c63ff" />
+    <button onclick="reloadWidget()">Reload Widget</button>
+    <div class="hint">Website ID must match one you've scraped via the admin panel.</div>
+  </div>
+
+  <script src="chat-widget.js"></script>
+  <script>
+    // ── Detect file:// and show warning ───────────────────────────────
+    if (location.protocol === 'file:') {
+      document.getElementById('setup-banner').style.display = 'block';
+    }
+
+    // ── Backend health check ──────────────────────────────────────────
+    const apiUrl = document.getElementById('cfg-apiUrl').value;
+    const dot    = document.getElementById('status-dot');
+    const label  = document.getElementById('status-text');
+
+    fetch(apiUrl + '/api/health', { signal: AbortSignal.timeout(4000) })
+      .then(r => r.json())
+      .then(data => {
+        dot.className   = 'dot dot-ok';
+        label.textContent = '✓ Backend connected — ' + apiUrl;
+      })
+      .catch(() => {
+        dot.className   = 'dot dot-err';
+        label.innerHTML = '✗ Backend not reachable at <strong>' + apiUrl + '</strong> — '
+          + 'run <code style="background:#f0f0f8;padding:1px 5px;border-radius:3px">cd backend &amp;&amp; npm run dev</code>';
+      });
+
+    // ── Widget reload helper ──────────────────────────────────────────
+    function reloadWidget() {
+      const websiteId    = document.getElementById('cfg-websiteId').value.trim();
+      const apiUrl       = document.getElementById('cfg-apiUrl').value.trim();
+      const primaryColor = document.getElementById('cfg-color').value.trim();
+
+      document.querySelectorAll('.cw-launcher, .cw-window').forEach(el => el.remove());
+      document.querySelectorAll('style').forEach(s => {
+        if (s.textContent.includes('.cw-launcher')) s.remove();
+      });
+
+      ChatWidget.init({ websiteId, apiUrl, primaryColor });
+    }
+
+    // ── Initial widget load ───────────────────────────────────────────
+    ChatWidget.init({
+      websiteId:      'demo-site',
+      apiUrl:         'http://localhost:5000',
+      title:          'Website Assistant',
+      welcomeMessage: '👋 Hi! Ask me anything about this website.'
+    });
+  </script>
+</body>
+</html>
