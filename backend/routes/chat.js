@@ -9,11 +9,9 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
-// Lower threshold so real questions match; greetings are excluded separately
 const SIMILARITY_THRESHOLD = 0.32;
 const TOP_K = 3;
 
-// These patterns bypass vector search entirely — always answer confidently
 const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
 const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you|ok|okay|sure|great|cool|awesome|bye|goodbye|see you|cheers)\b/i;
 
@@ -26,7 +24,6 @@ router.post("/", async (req, res) => {
 
   const trimmed = message.trim();
 
-  // Greetings / small-talk: never escalate, never touch DB
   if (GREETING_RE.test(trimmed) || SMALL_TALK_RE.test(trimmed)) {
     return res.json({
       answer: "Hello! I'm here to help you with any questions about this website. What would you like to know?",

@@ -6,7 +6,7 @@ try {
     websiteId: "default",
     apiUrl: "https://chatbot-gurp.onrender.com",
     title: "Website Assistant",
-    welcomeMessage: "👋 Hi! I can answer questions about this website. What would you like to know?",
+    welcomeMessage: "Hi! I can answer questions about this website. What would you like to know?",
     primaryColor: "#6c63ff",
     position: "bottom-right",
   };
@@ -143,7 +143,7 @@ try {
       flex: 1; background: #1e1e2e; border: 1px solid #2a2a40;
       border-radius: 10px; color: #e0e0f0; font-size: 13px;
       font-family: inherit; padding: 9px 12px; outline: none;
-      resize: none; height: 38px; transition: border-color 0.15s; box-sizing: border-box;
+      resize: none; min-height: 38px; max-height: 160px; transition: border-color 0.15s; box-sizing: border-box; overflow: hidden;
     }
     .cw-text-input:focus { border-color: var(--cw-primary); }
     .cw-text-input::placeholder { color: #555; }
@@ -216,12 +216,12 @@ try {
     const header = el("div", "cw-header");
     const headerLeft = el("div", "cw-header-left");
     const avatar = el("div", "cw-avatar");
-    avatar.textContent = "🤖";
+    avatar.textContent = "";
     const titleWrap = el("div", "");
     const titleEl = el("div", "cw-title");
     titleEl.textContent = cfg.title;
     const subtitleEl = el("div", "cw-subtitle");
-    subtitleEl.textContent = "AI-powered · Online";
+    subtitleEl.textContent = "";
     titleWrap.append(titleEl, subtitleEl);
     headerLeft.append(avatar, titleWrap);
 
@@ -238,6 +238,7 @@ try {
     textInput = el("textarea", "cw-text-input");
     textInput.placeholder = "Ask me anything…";
     textInput.rows = 1;
+    textInput.style.overflow = 'hidden';
     sendBtn = el("button", "cw-send-btn");
     sendBtn.innerHTML = iconSend();
     sendBtn.setAttribute("aria-label", "Send");
@@ -253,6 +254,15 @@ try {
     textInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
+    textInput.addEventListener('input', adjustInputHeight);
+  }
+
+  function adjustInputHeight() {
+    if (!textInput) return;
+    textInput.style.height = 'auto';
+    const h = Math.min(textInput.scrollHeight, 160);
+    textInput.style.height = h + 'px';
+    textInput.style.overflowY = h >= 160 ? 'auto' : 'hidden';
   }
 
   function toggleChat() {
@@ -270,6 +280,7 @@ try {
     const text = textInput.value.trim();
     if (!text) return;
     textInput.value = "";
+    adjustInputHeight();
     sendBtn.disabled = true;
 
     appendUserMessage(text);
