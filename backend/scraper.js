@@ -1,173 +1,87 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { URL } from "url";
-import { getEmbedding } from "./utils/embeddings.js";
-import Chunk from "./models/Chunk.js";
+import { getEmbedding } from "../backend/utils/embeddings.js";
+import Chunk from "../backend/models/Chunk.js";
 
 const CHUNK_SIZE = 400;
 const CHUNK_OVERLAP = 50;
 const MAX_PAGES = 50;
-const SPA_THRESHOLD = 300;
 
 function extractLinks($, baseUrl) {
   const base = new URL(baseUrl);
   const links = new Set();
+
   $("a[href]").each((_, el) => {
     try {
       const href = $(el).attr("href");
       const resolved = new URL(href, baseUrl);
+      // Same origin only, strip hash and query
       if (resolved.hostname === base.hostname) {
         resolved.hash = "";
         links.add(resolved.toString());
       }
-    } catch { /* ignore */ }
+    } catch {
+      
+    }
   });
+
   return [...links];
 }
 
 function extractText($) {
-  $("script, style, noscript, iframe, img, svg, canvas, video, audio").remove();
+  $("script, style, nav, footer, header, noscript, iframe, img").remove();
 
   const title = $("title").text().trim() || $("h1").first().text().trim();
 
-  const textParts = [];
-  $(
-    "h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption, label, " +
-    "span, div, section, article, main, header, footer, nav, a"
-  ).each((_, el) => {
-    const $el = $(el);
-    const ownText = $el.clone().children().remove().end().text().trim();
-    if (ownText.length > 15) {
-      textParts.push(ownText);
+  const contentSelectors = [
+    "main",
+    "article",
+    ".content",
+    ".post",
+    "#content",
+    "body",
+  ];
+
+  let rawText = "";
+  for (const sel of contentSelectors) {
+    const el = $(sel);
+    if (el.length) {
+      rawText = el.text();
+      break;
     }
-  });
+  }
 
-  // Deduplicate (React renders same text in parent + child nodes)
-  const seen = new Set();
-  const deduped = textParts.filter(t => {
-    if (seen.has(t)) return false;
-    seen.add(t);
-    return true;
-  });
-
-  const text = deduped.join(" ").replace(/\s+/g, " ").trim();
+  const text = rawText.replace(/\s+/g, " ").trim();
   return { title, text };
 }
 
 function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   const words = text.split(" ").filter(Boolean);
   const chunks = [];
+
   for (let i = 0; i < words.length; i += size - overlap) {
     const chunk = words.slice(i, i + size).join(" ");
-    if (chunk.length > 80) chunks.push(chunk);
+    if (chunk.length > 80) {
+      chunks.push(chunk);
+    }
     if (i + size >= words.length) break;
   }
+
   return chunks;
-}
-
-async function fetchWithAxios(url) {
-  const res = await axios.get(url, {
-    timeout: 15000,
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.5",
-    },
-  });
-  return res.data;
-}
-
-let _browser = null;
-
-async function getBrowser() {
-  if (_browser) return _browser;
-
-  const puppeteer = await import("puppeteer-core").then(m => m.default || m);
-  const chromium  = await import("@sparticuz/chromium").then(m => m.default || m);
-
-  _browser = await puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
-  });
-
-  return _browser;
-}
-
-async function fetchWithPuppeteer(url) {
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
-    );
-
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const type = req.resourceType();
-      if (["image", "font", "media"].includes(type)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-    try {
-      await page.waitForFunction(
-        () => {
-          const els = document.querySelectorAll("h1, h2, h3, p, li, article, main, section");
-          const totalText = Array.from(els).map(e => e.innerText || "").join(" ").trim();
-          return totalText.length > 100;
-        },
-        { timeout: 8000 }
-      );
-    } catch {
-      await new Promise(r => setTimeout(r, 3000));
-    }
-    await new Promise(r => setTimeout(r, 1000));
-    return await page.content();
-  } finally {
-    await page.close();
-  }
-}
-
-async function smartFetch(url) {
-  let html;
-  let usedPuppeteer = false;
-
-  try {
-    html = await fetchWithAxios(url);
-    const $ = cheerio.load(html);
-    const { text } = extractText($);
-
-    if (text.length < SPA_THRESHOLD) {
-      console.log(`SPA detected (only ${text.length} chars), switching to Puppeteer…`);
-      html = await fetchWithPuppeteer(url);
-      usedPuppeteer = true;
-    }
-  } catch (axiosErr) {
-    console.log(`axios failed (${axiosErr.message}), trying Puppeteer…`);
-    html = await fetchWithPuppeteer(url);
-    usedPuppeteer = true;
-  }
-
-  return { html, usedPuppeteer };
 }
 
 export async function scrapeAndIndex(startUrl, websiteId) {
   await Chunk.deleteMany({ websiteId });
-  console.log(`Cleared old chunks for: ${websiteId}`);
+  console.log(`Cleared old chunks for websiteId: ${websiteId}`);
 
   const visited = new Set();
   const queue = [startUrl];
   let chunksStored = 0;
-  let puppeteerMode = false;
 
   while (queue.length > 0 && visited.size < MAX_PAGES) {
     const url = queue.shift();
+
     if (visited.has(url)) continue;
     visited.add(url);
 
@@ -175,13 +89,14 @@ export async function scrapeAndIndex(startUrl, websiteId) {
 
     let html;
     try {
-      if (puppeteerMode) {
-        html = await fetchWithPuppeteer(url);
-      } else {
-        const result = await smartFetch(url);
-        html = result.html;
-        if (result.usedPuppeteer) puppeteerMode = true;
-      }
+      const response = await axios.get(url, {
+        timeout: 10000,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; ChatBot-Scraper/1.0)",
+        },
+      });
+      html = response.data;
     } catch (err) {
       console.warn(`Failed to fetch ${url}: ${err.message}`);
       continue;
@@ -190,10 +105,8 @@ export async function scrapeAndIndex(startUrl, websiteId) {
     const $ = cheerio.load(html);
     const { title, text } = extractText($);
 
-    console.log(`Extracted ${text.length} chars from "${title}"`);
-
-    if (text.length < 80) {
-      console.log(`Skipping — too little content even after render`);
+    if (text.length < 100) {
+      console.log(`Skipping (too little content)`);
       continue;
     }
 
@@ -203,20 +116,25 @@ export async function scrapeAndIndex(startUrl, websiteId) {
     }
 
     const chunks = chunkText(text);
-    console.log(`${chunks.length} chunks`);
+    console.log(`${chunks.length} chunks from "${title}"`);
 
-    for (const chunkContent of chunks) {
-      const embedding = await getEmbedding(chunkContent);
-      await Chunk.create({ websiteId, url, title, content: chunkContent, embedding });
+    for (const chunkText_ of chunks) {
+      const embedding = await getEmbedding(chunkText_);
+
+      await Chunk.create({
+        websiteId,
+        url,
+        title,
+        content: chunkText_,
+        embedding,
+      });
+
       chunksStored++;
     }
   }
 
-  if (_browser) {
-    await _browser.close();
-    _browser = null;
-  }
-
-  console.log(`\nDone! Pages: ${visited.size} | Chunks: ${chunksStored}`);
+  console.log(
+    `\nDone! Pages scraped: ${visited.size} | Chunks stored: ${chunksStored}`
+  );
   return { pagesScraped: visited.size, chunksStored };
 }
