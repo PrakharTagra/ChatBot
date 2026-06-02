@@ -7,7 +7,7 @@ import Chunk from "./models/Chunk.js";
 const CHUNK_SIZE = 400;
 const CHUNK_OVERLAP = 50;
 const MAX_PAGES = 50;
-const SPA_THRESHOLD = 300; // chars of visible text — below this, try Puppeteer
+const SPA_THRESHOLD = 300;
 
 // ─── Link extraction ────────────────────────────────────────────────────────
 function extractLinks($, baseUrl) {
@@ -26,9 +26,6 @@ function extractLinks($, baseUrl) {
   return [...links];
 }
 
-// ─── Text extraction ────────────────────────────────────────────────────────
-// Strategy: remove only pure noise (scripts/styles/media), keep structural
-// elements because React apps put real content inside header/nav/footer too.
 function extractText($) {
   // Remove only truly non-content elements
   $("script, style, noscript, iframe, img, svg, canvas, video, audio").remove();

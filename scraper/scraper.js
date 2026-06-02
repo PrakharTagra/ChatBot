@@ -4,13 +4,10 @@ import { URL } from "url";
 import { getEmbedding } from "../backend/utils/embeddings.js";
 import Chunk from "../backend/models/Chunk.js";
 
-const CHUNK_SIZE = 400;      // target words per chunk
-const CHUNK_OVERLAP = 50;    // words to overlap between chunks
-const MAX_PAGES = 50;        // safety cap
+const CHUNK_SIZE = 400;
+const CHUNK_OVERLAP = 50;
+const MAX_PAGES = 50;
 
-/**
- * Extract all internal links from a parsed cheerio page.
- */
 function extractLinks($, baseUrl) {
   const base = new URL(baseUrl);
   const links = new Set();
@@ -25,17 +22,13 @@ function extractLinks($, baseUrl) {
         links.add(resolved.toString());
       }
     } catch {
-      // ignore malformed hrefs
+      
     }
   });
 
   return [...links];
 }
 
-/**
- * Extract clean text content from a cheerio-parsed page.
- * Removes nav, footer, scripts, styles, and other noise.
- */
 function extractText($) {
   $("script, style, nav, footer, header, noscript, iframe, img").remove();
 
@@ -59,14 +52,10 @@ function extractText($) {
     }
   }
 
-  // Collapse whitespace
   const text = rawText.replace(/\s+/g, " ").trim();
   return { title, text };
 }
 
-/**
- * Split text into overlapping word chunks.
- */
 function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   const words = text.split(" ").filter(Boolean);
   const chunks = [];
@@ -82,17 +71,7 @@ function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   return chunks;
 }
 
-/**
- * Main scraper function.
- * Crawls all pages reachable from startUrl, chunks content, generates embeddings,
- * and saves to MongoDB.
- *
- * @param {string} startUrl  - The root URL to start crawling from
- * @param {string} websiteId - Unique identifier for this website (used to namespace chunks)
- * @returns {Promise<{ pagesScraped: number, chunksStored: number }>}
- */
 export async function scrapeAndIndex(startUrl, websiteId) {
-  // Delete old chunks for this websiteId so re-scraping is idempotent
   await Chunk.deleteMany({ websiteId });
   console.log(`🗑️  Cleared old chunks for websiteId: ${websiteId}`);
 
@@ -137,7 +116,6 @@ export async function scrapeAndIndex(startUrl, websiteId) {
       if (!visited.has(link)) queue.push(link);
     }
 
-    // Chunk and embed
     const chunks = chunkText(text);
     console.log(`   ✂️  ${chunks.length} chunks from "${title}"`);
 
