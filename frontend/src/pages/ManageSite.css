@@ -137,58 +137,6 @@
 
 .chat-input-row { display: flex; gap: 10px; }
 
-/* Leads */
-.empty-leads {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 40px 0;
-  color: var(--text2);
-  font-size: 13px;
-}
-
-.leads-table-wrap { overflow-x: auto; }
-
-.leads-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.leads-table th {
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text2);
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  font-weight: 700;
-}
-
-.leads-table td {
-  padding: 12px;
-  border-bottom: 1px solid rgba(42,42,61,0.5);
-  color: var(--text);
-  vertical-align: top;
-}
-
-.leads-table tr:hover td { background: var(--bg3); }
-
-.lead-email { color: var(--accent); text-decoration: none; }
-.lead-email:hover { text-decoration: underline; }
-
-.lead-msg {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text2);
-}
-
-.lead-date { color: var(--text2); white-space: nowrap; }
-
 /* Re-scrape */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 

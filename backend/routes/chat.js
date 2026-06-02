@@ -55,12 +55,13 @@ router.post("/", async (req, res) => {
     const topScore = ranked[0].score;
     const confident = topScore >= SIMILARITY_THRESHOLD;
 
-    // Always derive siteBaseUrl from stored chunks — no need for client to send it
     let siteBaseUrl = null;
     try {
       const u = new URL(chunks[0].url);
       siteBaseUrl = u.origin;
-    } catch { /* ignore */ }
+    } catch {
+      // ignore malformed source URLs
+    }
 
     const context = ranked
       .map((c, i) => `[Source ${i + 1}: ${c.url}]\n${c.content}`)
@@ -79,7 +80,7 @@ Write in short paragraphs. If you reference a page, mention its name naturally i
 CONTEXT:
 ${context}`
       : `You are a helpful assistant. No relevant content was found for this question.
-Write ONE short plain sentence only: say you couldn't find that information and suggest they get in touch.
+    Write ONE short plain sentence only: say you couldn't find that information and suggest they get in touch.
 No markdown, no links, no contact URL — just the plain sentence.`;
 
     const completion = await getGroq().chat.completions.create({
@@ -100,10 +101,8 @@ No markdown, no links, no contact URL — just the plain sentence.`;
       answer,
       source,
       confident,
-      // Widget uses this to show the Contact Us button — model never sees this URL
       ...(!confident && siteBaseUrl ? { contactUrl: siteBaseUrl + "/contact" } : {}),
     });
-
   } catch (err) {
     console.error("Chat error:", err);
     return res.status(500).json({ error: "Chat failed.", detail: err.message });

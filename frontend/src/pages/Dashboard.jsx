@@ -8,7 +8,7 @@ const API = import.meta.env.VITE_API_URL || 'https://chatbot-gurp.onrender.com'
 export default function Dashboard() {
   const navigate = useNavigate()
   const [sites, setSites] = useState([])
-  const [stats, setStats] = useState({ totalSites: 0, totalChunks: 0, totalLeads: 0 })
+  const [stats, setStats] = useState({ totalSites: 0, totalChunks: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -57,7 +57,6 @@ export default function Dashboard() {
       <div className="stat-grid">
         <StatCard icon="🌐" label="Websites Indexed" value={stats.totalSites ?? sites.length} color="accent" />
         <StatCard icon="📄" label="Content Chunks" value={stats.totalChunks ?? '—'} color="teal" />
-        <StatCard icon="📥" label="Leads Captured" value={stats.totalLeads ?? '—'} color="pink" />
         <StatCard icon="⚡" label="AI Engine" value="Groq Llama" color="yellow" small />
       </div>
 
@@ -132,10 +131,6 @@ function SiteCard({ site, onManage, onDelete }) {
         <div className="meta-item">
           <span className="meta-label">Chunks</span>
           <span className="meta-val">{site.chunks ?? 0}</span>
-        </div>
-        <div className="meta-item">
-          <span className="meta-label">Leads</span>
-          <span className="meta-val">{site.leads ?? 0}</span>
         </div>
         <div className="meta-item">
           <span className="meta-label">Last scraped</span>

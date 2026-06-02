@@ -9,9 +9,7 @@ export default function ManageSite() {
   const { websiteId } = useParams()
   const navigate = useNavigate()
 
-  const [tab, setTab] = useState('embed') // embed | test | leads | rescrape
-  const [leads, setLeads] = useState([])
-  const [leadsLoading, setLeadsLoading] = useState(false)
+  const [tab, setTab] = useState('embed') // embed | test | rescrape
   const [copied, setCopied] = useState(false)
   const [backendOk, setBackendOk] = useState(null) // null=checking, true=ok, false=down
 
@@ -32,7 +30,6 @@ export default function ManageSite() {
   const chatHistoryRef = useRef([])
 
   useEffect(() => {
-    if (tab === 'leads') fetchLeads()
     if (tab === 'test' && backendOk === null) checkBackend()
   }, [tab])
 
@@ -47,15 +44,6 @@ export default function ManageSite() {
     } catch {
       setBackendOk(false)
     }
-  }
-
-  async function fetchLeads() {
-    setLeadsLoading(true)
-    try {
-      const res = await axios.get(`${API}/api/leads/${websiteId}`)
-      setLeads(res.data.leads || [])
-    } catch { setLeads([]) }
-    finally { setLeadsLoading(false) }
   }
 
   async function handleRescrape() {
@@ -155,7 +143,6 @@ export default function ManageSite() {
         {[
           { id: 'embed', label: '📋 Embed Code' },
           { id: 'test', label: '💬 Live Test' },
-          { id: 'leads', label: '📥 Leads' },
           { id: 'rescrape', label: '🔄 Re-scrape' },
         ].map(t => (
           <button
@@ -236,8 +223,8 @@ export default function ManageSite() {
                         </a>
                       </div>
                     )}
-                    {m.confident === false && !m.contactUrl && (
-                      <div className="chat-label">⚠️ Low confidence — widget would show Contact Us button</div>
+                    {m.confident === false && (
+                      <div className="chat-label">⚠️ Low confidence — contact page available</div>
                     )}
                   </div>
                 </div>
@@ -265,55 +252,6 @@ export default function ManageSite() {
                 Send
               </button>
             </div>
-          </div>
-        )}
-
-        {/* ── Leads Tab ── */}
-        {tab === 'leads' && (
-          <div className="card fade-in">
-            <div className="tab-header">
-              <div>
-                <h3>Captured Leads</h3>
-                <p>Contact form submissions from users who couldn't find answers.</p>
-              </div>
-              <button className="btn btn-ghost btn-sm" onClick={fetchLeads}>↻ Refresh</button>
-            </div>
-
-            {leadsLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 0', color: 'var(--text2)' }}>
-                <div className="spinner" /> Loading leads…
-              </div>
-            ) : leads.length === 0 ? (
-              <div className="empty-leads">
-                <span style={{ fontSize: 32 }}>📭</span>
-                <p>No leads yet. They'll appear here when users submit the contact form.</p>
-              </div>
-            ) : (
-              <div className="leads-table-wrap">
-                <table className="leads-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Phone</th>
-                      <th>Message</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leads.map((lead, i) => (
-                      <tr key={i}>
-                        <td>{lead.name}</td>
-                        <td><a href={`mailto:${lead.email}`} className="lead-email">{lead.email}</a></td>
-                        <td>{lead.phone || '—'}</td>
-                        <td className="lead-msg" title={lead.message}>{lead.message}</td>
-                        <td className="lead-date">{new Date(lead.createdAt).toLocaleDateString('en-IN')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         )}
 

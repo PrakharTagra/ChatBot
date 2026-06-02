@@ -114,6 +114,7 @@ try {
       display: flex; flex-direction: column; align-items: flex-start;
       gap: 6px; margin-top: 4px;
     }
+
     .cw-contact-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 7px 14px; border-radius: 20px;
@@ -291,8 +292,8 @@ try {
       typingEl.remove();
 
       if (!data.confident && data.contactUrl) {
-        // Bot can't answer — show answer + a clean "Contact Us" button
-        appendBotMessage(data.answer, null, data.contactUrl);
+        // Answer + contact-page redirect for low-confidence questions.
+        appendBotMessage(data.answer, data.source, data.contactUrl);
       } else {
         appendBotMessage(data.answer, data.source);
       }

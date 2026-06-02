@@ -1,4 +1,20 @@
-(()=>{(function(){try{let S=function(e){try{c=Object.assign({},g,e),document.readyState==="loading"?document.addEventListener("DOMContentLoaded",function(){try{v()}catch(t){console.warn("[ChatWidget] Init error:",t)}}):v()}catch(t){console.warn("[ChatWidget] Init error:",t)}},v=function(){E(),T(),j(),m(c.welcomeMessage)},E=function(){let e=document.createElement("style");e.textContent=L.replace(/var\(--cw-primary\)/g,c.primaryColor),(document.head||document.documentElement).appendChild(e)},T=function(){let e=c.position==="bottom-left"?"bl":"br";p=n("button",`cw-launcher cw-launcher-${e}`),p.innerHTML=z(),p.setAttribute("aria-label","Open chat"),u=n("span","cw-badge"),u.textContent="1",u.style.display="none",p.appendChild(u),x=n("div",`cw-window cw-window-${e} cw-hidden`),x.setAttribute("role","dialog"),x.setAttribute("aria-label",c.title);let t=n("div","cw-header"),o=n("div","cw-header-left"),i=n("div","cw-avatar");i.textContent="\u{1F916}";let s=n("div",""),a=n("div","cw-title");a.textContent=c.title;let r=n("div","cw-subtitle");r.textContent="AI-powered \xB7 Online",s.append(a,r),o.append(i,s);let b=n("button","cw-close-btn");b.textContent="\u2715",b.setAttribute("aria-label","Close chat"),b.onclick=k,t.append(o,b),l=n("div","cw-messages"),l.setAttribute("aria-live","polite");let M=n("div","cw-input-row");d=n("textarea","cw-text-input"),d.placeholder="Ask me anything\u2026",d.rows=1,w=n("button","cw-send-btn"),w.innerHTML=B(),w.setAttribute("aria-label","Send"),M.append(d,w),x.append(t,l,M),document.body.append(p,x)},j=function(){p.onclick=k,w.onclick=C,d.addEventListener("keydown",e=>{e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),C())})},k=function(){f=!f,x.classList.toggle("cw-hidden",!f),p.innerHTML=f?O():z(),f&&(u.style.display="none",setTimeout(()=>d.focus(),220),h())},A=function(e){let t=n("div","cw-msg cw-msg-user"),o=n("div","cw-bubble cw-bubble-user");o.textContent=e,t.appendChild(o),l.appendChild(t),y.push({role:"user",text:e}),h()},m=function(e,t,o){let i=n("div","cw-msg"),s=n("div","cw-bubble cw-bubble-bot");if(s.textContent=e,t)try{let a=document.createElement("a");a.href=t,a.target="_blank",a.rel="noopener noreferrer",a.className="cw-source-chip";let r=new URL(t);a.textContent="\u{1F517} "+(r.pathname==="/"?r.hostname:r.pathname);let b=n("div","");b.appendChild(a),s.appendChild(b)}catch{}if(o){let a=n("div","cw-escalate"),r=document.createElement("a");r.href=o,r.target="_blank",r.rel="noopener noreferrer",r.className="cw-contact-btn",r.innerHTML="\u2709\uFE0F Contact Us",a.appendChild(r),s.appendChild(a)}return i.appendChild(s),l.appendChild(i),y.push({role:"bot",text:e,source:t}),h(),i},I=function(){let e=n("div","cw-msg"),t=n("div","cw-bubble cw-bubble-bot cw-typing");return t.innerHTML='<span class="cw-dot"></span><span class="cw-dot"></span><span class="cw-dot"></span>',e.appendChild(t),l.appendChild(e),h(),e},h=function(){requestAnimationFrame(()=>{l.scrollTop=l.scrollHeight})},n=function(e,t){let o=document.createElement(e);return t&&(o.className=t),o},z=function(){return'<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>'},O=function(){return'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'},B=function(){return'<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'},g={websiteId:"default",apiUrl:"https://chatbot-gurp.onrender.com",title:"Website Assistant",welcomeMessage:"\u{1F44B} Hi! I can answer questions about this website. What would you like to know?",primaryColor:"#6c63ff",position:"bottom-right"},c=Object.assign({},g),L=`
+(() => {
+  (function () {
+    try {
+      "use strict";
+
+      const DEFAULTS = {
+        websiteId: "default",
+        apiUrl: "https://chatbot-gurp.onrender.com",
+        title: "Website Assistant",
+        welcomeMessage: "👋 Hi! I can answer questions about this website. What would you like to know?",
+        primaryColor: "#6c63ff",
+        position: "bottom-right",
+      };
+
+      let cfg = Object.assign({}, DEFAULTS);
+
+      const CSS = `
     .cw-launcher {
       position: fixed;
       width: 56px; height: 56px;
@@ -99,6 +115,7 @@
       display: flex; flex-direction: column; align-items: flex-start;
       gap: 6px; margin-top: 4px;
     }
+
     .cw-contact-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 7px 14px; border-radius: 20px;
@@ -147,4 +164,244 @@
     @media (max-width: 420px) {
       .cw-window { width: calc(100vw - 16px); right: 8px !important; left: 8px !important; }
     }
-  `,f=!1,y=[],p,u,x,l,d,w;async function C(){let e=d.value.trim();if(!e)return;d.value="",w.disabled=!0,A(e);let t=I();try{let i=await(await fetch(`${c.apiUrl}/api/chat`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:e,websiteId:c.websiteId,history:y.slice(-6).map(s=>({role:s.role==="bot"?"assistant":"user",content:s.text}))})})).json();t.remove(),!i.confident&&i.contactUrl?m(i.answer,null,i.contactUrl):m(i.answer,i.source)}catch{t.remove(),m("Sorry, I couldn't connect to the server. Please try again.")}finally{w.disabled=!1,f||(u.style.display="flex"),h()}}window.ChatWidget={init:S}}catch(g){console.warn("[ChatWidget] Failed to load:",g)}})();})();
+  `;
+
+      let isOpen = false;
+      let messages = [];
+      let launcher, badge, chatWindow, msgContainer, textInput, sendBtn;
+
+      function init(userConfig) {
+        try {
+          cfg = Object.assign({}, DEFAULTS, userConfig);
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", function () {
+              try {
+                _mount();
+              } catch (e) {
+                console.warn("[ChatWidget] Init error:", e);
+              }
+            });
+          } else {
+            _mount();
+          }
+        } catch (e) {
+          console.warn("[ChatWidget] Init error:", e);
+        }
+      }
+
+      function _mount() {
+        injectCSS();
+        buildDOM();
+        addListeners();
+        appendBotMessage(cfg.welcomeMessage);
+      }
+
+      function injectCSS() {
+        const style = document.createElement("style");
+        style.textContent = CSS.replace(/var\(--cw-primary\)/g, cfg.primaryColor);
+        (document.head || document.documentElement).appendChild(style);
+      }
+
+      function buildDOM() {
+        const posClass = cfg.position === "bottom-left" ? "bl" : "br";
+
+        launcher = el("button", `cw-launcher cw-launcher-${posClass}`);
+        launcher.innerHTML = iconChat();
+        launcher.setAttribute("aria-label", "Open chat");
+
+        badge = el("span", "cw-badge");
+        badge.textContent = "1";
+        badge.style.display = "none";
+        launcher.appendChild(badge);
+
+        chatWindow = el("div", `cw-window cw-window-${posClass} cw-hidden`);
+        chatWindow.setAttribute("role", "dialog");
+        chatWindow.setAttribute("aria-label", cfg.title);
+
+        const header = el("div", "cw-header");
+        const headerLeft = el("div", "cw-header-left");
+        const avatar = el("div", "cw-avatar");
+        avatar.textContent = "🤖";
+        const titleWrap = el("div", "");
+        const titleEl = el("div", "cw-title");
+        titleEl.textContent = cfg.title;
+        const subtitleEl = el("div", "cw-subtitle");
+        subtitleEl.textContent = "AI-powered · Online";
+        titleWrap.append(titleEl, subtitleEl);
+        headerLeft.append(avatar, titleWrap);
+
+        const closeBtn = el("button", "cw-close-btn");
+        closeBtn.textContent = "✕";
+        closeBtn.setAttribute("aria-label", "Close chat");
+        closeBtn.onclick = toggleChat;
+        header.append(headerLeft, closeBtn);
+
+        msgContainer = el("div", "cw-messages");
+        msgContainer.setAttribute("aria-live", "polite");
+
+        const inputRow = el("div", "cw-input-row");
+        textInput = el("textarea", "cw-text-input");
+        textInput.placeholder = "Ask me anything…";
+        textInput.rows = 1;
+        sendBtn = el("button", "cw-send-btn");
+        sendBtn.innerHTML = iconSend();
+        sendBtn.setAttribute("aria-label", "Send");
+        inputRow.append(textInput, sendBtn);
+
+        chatWindow.append(header, msgContainer, inputRow);
+        document.body.append(launcher, chatWindow);
+      }
+
+      function addListeners() {
+        launcher.onclick = toggleChat;
+        sendBtn.onclick = sendMessage;
+        textInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+          }
+        });
+      }
+
+      function toggleChat() {
+        isOpen = !isOpen;
+        chatWindow.classList.toggle("cw-hidden", !isOpen);
+        launcher.innerHTML = isOpen ? iconX() : iconChat();
+        if (isOpen) {
+          badge.style.display = "none";
+          setTimeout(() => textInput.focus(), 220);
+          scrollToBottom();
+        }
+      }
+
+      async function sendMessage() {
+        const text = textInput.value.trim();
+        if (!text) return;
+        textInput.value = "";
+        sendBtn.disabled = true;
+
+        appendUserMessage(text);
+        const typingEl = appendTyping();
+
+        try {
+          const res = await fetch(`${cfg.apiUrl}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: text,
+              websiteId: cfg.websiteId,
+              history: messages.slice(-6).map((m) => ({
+                role: m.role === "bot" ? "assistant" : "user",
+                content: m.text,
+              })),
+            }),
+          });
+          const data = await res.json();
+          typingEl.remove();
+
+          if (!data.confident && data.contactUrl) {
+            // Answer + contact-page redirect for low-confidence questions.
+            appendBotMessage(data.answer, data.source, data.contactUrl);
+          } else {
+            appendBotMessage(data.answer, data.source);
+          }
+        } catch (err) {
+          typingEl.remove();
+          appendBotMessage("Sorry, I couldn't connect to the server. Please try again.");
+        } finally {
+          sendBtn.disabled = false;
+          if (!isOpen) {
+            badge.style.display = "flex";
+          }
+          scrollToBottom();
+        }
+      }
+
+      function appendUserMessage(text) {
+        const wrap = el("div", "cw-msg cw-msg-user");
+        const bubble = el("div", "cw-bubble cw-bubble-user");
+        bubble.textContent = text;
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        messages.push({ role: "user", text });
+        scrollToBottom();
+      }
+
+      function appendBotMessage(text, source, contactUrl) {
+        const wrap = el("div", "cw-msg");
+        const bubble = el("div", "cw-bubble cw-bubble-bot");
+        bubble.textContent = text;
+
+        if (source) {
+          try {
+            const chip = document.createElement("a");
+            chip.href = source;
+            chip.target = "_blank";
+            chip.rel = "noopener noreferrer";
+            chip.className = "cw-source-chip";
+            const u = new URL(source);
+            chip.textContent = "🔗 " + (u.pathname === "/" ? u.hostname : u.pathname);
+            const chipRow = el("div", "");
+            chipRow.appendChild(chip);
+            bubble.appendChild(chipRow);
+          } catch {
+          }
+        }
+
+        if (contactUrl) {
+          const escalate = el("div", "cw-escalate");
+          const btn = document.createElement("a");
+          btn.href = contactUrl;
+          btn.target = "_blank";
+          btn.rel = "noopener noreferrer"
+          btn.className = "cw-contact-btn";
+          btn.innerHTML = "✉️ Contact Us";
+          escalate.appendChild(btn);
+          bubble.appendChild(escalate);
+        }
+
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        messages.push({ role: "bot", text, source });
+        scrollToBottom();
+        return wrap;
+      }
+
+      function appendTyping() {
+        const wrap = el("div", "cw-msg");
+        const bubble = el("div", "cw-bubble cw-bubble-bot cw-typing");
+        bubble.innerHTML = `<span class="cw-dot"></span><span class="cw-dot"></span><span class="cw-dot"></span>`;
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        scrollToBottom();
+        return wrap;
+      }
+
+      function scrollToBottom() {
+        requestAnimationFrame(() => {
+          msgContainer.scrollTop = msgContainer.scrollHeight;
+        });
+      }
+
+      function el(tag, className) {
+        const e = document.createElement(tag);
+        if (className) e.className = className;
+        return e;
+      }
+
+      function iconChat() {
+        return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>`;
+      }
+      function iconX() {
+        return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+      }
+      function iconSend() {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
+      }
+
+      window.ChatWidget = { init };
+    } catch (e) {
+      console.warn("[ChatWidget] Failed to load:", e);
+    }
+  })();
+})();

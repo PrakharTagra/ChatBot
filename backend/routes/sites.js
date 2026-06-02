@@ -1,6 +1,5 @@
 import express from "express";
 import Chunk from "../models/Chunk.js";
-import Lead from "../models/Lead.js";
 
 const router = express.Router();
 
@@ -13,12 +12,10 @@ router.get("/", async (req, res) => {
       websiteIds.map(async (id) => {
         const sample = await Chunk.findOne({ websiteId: id }).sort({ createdAt: -1 });
         const chunkCount = await Chunk.countDocuments({ websiteId: id });
-        const leadCount = await Lead.countDocuments({ websiteId: id });
         return {
           websiteId: id,
           url: sample?.url || "",
           chunks: chunkCount,
-          leads: leadCount,
           lastScraped: sample?.createdAt || null,
         };
       })
@@ -30,13 +27,12 @@ router.get("/", async (req, res) => {
   }
 });
 
-// DELETE /api/sites/:websiteId — delete all chunks + leads for a site
+// DELETE /api/sites/:websiteId — delete all chunks for a site
 router.delete("/:websiteId", async (req, res) => {
   const { websiteId } = req.params;
   try {
     await Promise.all([
       Chunk.deleteMany({ websiteId }),
-      Lead.deleteMany({ websiteId }),
     ]);
     res.json({ success: true });
   } catch (err) {

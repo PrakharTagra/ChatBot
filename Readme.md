@@ -1,6 +1,6 @@
 # 🤖 AI Website Chat Agent
 
-An AI-powered embeddable chat widget that answers visitor questions using your website's content, and automatically captures leads when it can't answer.
+An AI-powered embeddable chat widget that answers visitor questions using your website's content.
 
 ---
 
@@ -69,8 +69,7 @@ npm run build
 2. The **scraper** crawls up to 50 pages, chunks the content, generates embeddings, and stores them in MongoDB
 3. When a visitor asks a question, the **chat API** embeds the query and finds the most semantically similar content chunks
 4. The best chunks are sent as context to **Groq's Llama 3.1** which generates a natural answer
-5. If similarity score is below the threshold, `confident: false` is returned → the widget shows a **contact form**
-6. Lead data is saved to MongoDB and visible in the **Leads tab** of the admin dashboard
+5. If similarity score is below the threshold, `confident: false` is returned → the widget shows a short fallback response
 
 ---
 
@@ -92,17 +91,8 @@ Response:
 { "answer": "...", "source": "https://yoursite.com/services", "confident": true }
 ```
 
-### POST /api/contact
-Submit a contact form lead.
-```json
-{ "name": "John", "email": "j@example.com", "message": "...", "websiteId": "your-site" }
-```
-
 ### GET /api/sites
 List all indexed websites with stats.
-
-### GET /api/leads/:websiteId
-Get contact form submissions for a site.
 
 ### DELETE /api/sites/:websiteId
 Remove a site and all its data.
@@ -142,11 +132,10 @@ PORT=5000
 
 | Page | What it does |
 |---|---|
-| Dashboard | See all sites, total chunks, total leads |
+| Dashboard | See all sites and total chunks |
 | Add Website | Enter URL, customize widget, run scrape, copy embed code |
 | Manage → Embed | Copy the embed snippet |
 | Manage → Live Test | Chat with the bot directly in the browser |
-| Manage → Leads | View all captured contact form submissions |
 | Manage → Re-scrape | Re-index the site after content updates |
 
 ---
