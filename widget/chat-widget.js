@@ -240,14 +240,14 @@
         const header = el("div", "cw-header");
         const headerLeft = el("div", "cw-header-left");
 
-        const avatar = el("div", "cw-avatar");  // ✅ declared at outer scope
+        const avatar = el("div", "cw-avatar");
         if (cfg.logoUrl) {
           const img = document.createElement("img");
           img.src = cfg.logoUrl;
           img.alt = cfg.title;
           avatar.appendChild(img);
         } else {
-          avatar.textContent = "💬";  // fallback icon when no logo provided
+          avatar.textContent = "💬";
         }
 
         const titleWrap = el("div", "");
@@ -319,7 +319,6 @@
       }
 
       async function sendMessage() {
-        // If we're in lead collection mode, forward to lead handler
         if (leadStep && leadStep !== "saving" && leadStep !== "done") {
           handleLeadInput(textInput.value.trim());
           textInput.value = "";
@@ -354,7 +353,6 @@
 
           if (!data.confident && data.action === "collect_lead") {
             appendBotMessage(data.answer);
-            // Kick off lead capture flow
             setTimeout(() => startLeadCapture(), 400);
           } else {
             appendBotMessage(data.answer, data.source);
@@ -369,12 +367,9 @@
         }
       }
 
-      // ─── Lead Capture Flow ───────────────────────────────────────────────────
-
       function startLeadCapture() {
         leadStep = "name";
         leadData = {};
-        // Disable main input row
         setMainInputEnabled(false);
         appendLeadPrompt(
           "No problem! I can have someone from the team reach out to you. What's your name?",
@@ -506,8 +501,6 @@
         sendBtn.disabled = !enabled;
         textInput.placeholder = enabled ? "Ask me anything…" : "Please fill in the form above…";
       }
-
-      // ─── Shared helpers ──────────────────────────────────────────────────────
 
       function appendUserMessage(text) {
         const wrap = el("div", "cw-msg cw-msg-user");
