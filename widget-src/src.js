@@ -1,19 +1,22 @@
-(function(){
-try {
-"use strict";
+(() => {
+  (function () {
+    try {
+      "use strict";
 
-  const DEFAULTS = {
-    websiteId: "default",
-    apiUrl: "https://chatbot-gurp.onrender.com",
-    title: "Website Assistant",
-    welcomeMessage: "Hi! I can answer questions about this website. What would you like to know?",
-    primaryColor: "#6c63ff",
-    position: "bottom-right",
-  };
+      const DEFAULTS = {
+        websiteId: "default",
+        websiteName: "",
+        apiUrl: "https://chatbot-gurp.onrender.com",
+        title: "Website Assistant",
+        welcomeMessage: "",
+        primaryColor: "#6c63ff",
+        position: "bottom-right",
+        logoUrl: "",
+      };
 
-  let cfg = Object.assign({}, DEFAULTS);
+      let cfg = Object.assign({}, DEFAULTS);
 
-  const CSS = `
+      const CSS = `
     .cw-launcher {
       position: fixed;
       width: 56px; height: 56px;
@@ -63,6 +66,10 @@ try {
       width: 32px; height: 32px;
       background: rgba(255,255,255,0.25); border-radius: 50%;
       display: flex; align-items: center; justify-content: center; font-size: 15px;
+      flex-shrink: 0; overflow: hidden;
+    }
+    .cw-avatar img {
+      width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
     }
     .cw-title { font-size: 14px; font-weight: 700; color: #fff; }
     .cw-subtitle { font-size: 11px; color: rgba(255,255,255,0.75); margin-top: 1px; }
@@ -110,20 +117,31 @@ try {
     }
     .cw-source-chip:hover { background: rgba(67,232,216,0.18); }
 
-    .cw-escalate {
-      display: flex; flex-direction: column; align-items: flex-start;
-      gap: 6px; margin-top: 4px;
+    .cw-lead-input-row {
+      display: flex; gap: 6px; margin-top: 8px;
     }
-
-    .cw-contact-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 7px 14px; border-radius: 20px;
-      background: var(--cw-primary); color: #fff;
-      font-size: 13px; font-weight: 600;
-      text-decoration: none; border: none; cursor: pointer;
+    .cw-lead-input {
+      flex: 1; background: #0f0f17; border: 1px solid #2a2a40;
+      border-radius: 8px; color: #e0e0f0; font-size: 13px;
+      font-family: inherit; padding: 7px 10px; outline: none;
+    }
+    .cw-lead-input:focus { border-color: var(--cw-primary); }
+    .cw-lead-input::placeholder { color: #555; }
+    .cw-lead-submit {
+      background: var(--cw-primary); color: #fff; border: none;
+      border-radius: 8px; padding: 7px 12px; cursor: pointer;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
       transition: opacity 0.15s;
     }
-    .cw-contact-btn:hover { opacity: 0.85; }
+    .cw-lead-submit:hover { opacity: 0.85; }
+    .cw-lead-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .cw-skip-btn {
+      background: none; border: none; color: #555;
+      font-size: 11px; cursor: pointer; margin-top: 6px;
+      padding: 0; text-decoration: underline;
+    }
+    .cw-skip-btn:hover { color: #888; }
 
     .cw-typing {
       display: flex; align-items: center; gap: 5px; padding: 10px 13px;
@@ -165,239 +183,402 @@ try {
     }
   `;
 
-  let isOpen = false;
-  let messages = [];
-  let launcher, badge, chatWindow, msgContainer, textInput, sendBtn;
+      let isOpen = false;
+      let messages = [];
+      let launcher, badge, chatWindow, msgContainer, textInput, sendBtn;
 
-  function init(userConfig) {
-    try {
-      cfg = Object.assign({}, DEFAULTS, userConfig);
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", function() {
-          try { _mount(); } catch(e) { console.warn("[ChatWidget] Init error:", e); }
+      let leadStep = null;
+      let leadData = {};
+      let leadInputEl = null;
+
+      function init(userConfig) {
+        try {
+          cfg = Object.assign({}, DEFAULTS, userConfig);
+          if (!cfg.welcomeMessage) {
+            const name = cfg.websiteName || cfg.title;
+            cfg.welcomeMessage = `Hi! I'm the ${name} assistant. What would you like to know?`;
+          }
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", function () {
+              try { _mount(); } catch (e) { console.warn("[ChatWidget] Init error:", e); }
+            });
+          } else {
+            _mount();
+          }
+        } catch (e) {
+          console.warn("[ChatWidget] Init error:", e);
+        }
+      }
+
+      function _mount() {
+        injectCSS();
+        buildDOM();
+        addListeners();
+        appendBotMessage(cfg.welcomeMessage);
+      }
+
+      function injectCSS() {
+        const style = document.createElement("style");
+        style.textContent = CSS.replace(/var\(--cw-primary\)/g, cfg.primaryColor);
+        (document.head || document.documentElement).appendChild(style);
+      }
+
+      function buildDOM() {
+        const posClass = cfg.position === "bottom-left" ? "bl" : "br";
+
+        launcher = el("button", `cw-launcher cw-launcher-${posClass}`);
+        launcher.innerHTML = iconChat();
+        launcher.setAttribute("aria-label", "Open chat");
+
+        badge = el("span", "cw-badge");
+        badge.textContent = "1";
+        badge.style.display = "none";
+        launcher.appendChild(badge);
+
+        chatWindow = el("div", `cw-window cw-window-${posClass} cw-hidden`);
+        chatWindow.setAttribute("role", "dialog");
+        chatWindow.setAttribute("aria-label", cfg.title);
+
+        const header = el("div", "cw-header");
+        const headerLeft = el("div", "cw-header-left");
+
+        const avatar = el("div", "cw-avatar");
+        if (cfg.logoUrl) {
+          const img = document.createElement("img");
+          img.src = cfg.logoUrl;
+          img.alt = cfg.title;
+          img.onerror = () => { avatar.style.display = "none"; };
+          avatar.appendChild(img);
+        } else {
+          avatar.textContent = "🤖";
+        }
+        headerLeft.appendChild(avatar);
+
+        const titleWrap = el("div", "");
+        const titleEl = el("div", "cw-title");
+        titleEl.textContent = cfg.title;
+        const subtitleEl = el("div", "cw-subtitle");
+        subtitleEl.textContent = "Online";
+        titleWrap.append(titleEl, subtitleEl);
+        headerLeft.appendChild(titleWrap);
+
+        const closeBtn = el("button", "cw-close-btn");
+        closeBtn.textContent = "✕";
+        closeBtn.setAttribute("aria-label", "Close chat");
+        closeBtn.onclick = toggleChat;
+        header.append(headerLeft, closeBtn);
+
+        msgContainer = el("div", "cw-messages");
+        msgContainer.setAttribute("aria-live", "polite");
+
+        const inputRow = el("div", "cw-input-row");
+        textInput = el("textarea", "cw-text-input");
+        textInput.placeholder = "Ask me anything…";
+        textInput.rows = 1;
+        textInput.style.overflow = "hidden";
+        sendBtn = el("button", "cw-send-btn");
+        sendBtn.innerHTML = iconSend();
+        sendBtn.setAttribute("aria-label", "Send");
+        inputRow.append(textInput, sendBtn);
+
+        chatWindow.append(header, msgContainer, inputRow);
+        document.body.append(launcher, chatWindow);
+      }
+
+      function adjustInputHeight() {
+        if (!textInput) return;
+        textInput.style.height = "auto";
+        const h = Math.min(textInput.scrollHeight, 160);
+        textInput.style.height = h + "px";
+        textInput.style.overflowY = h >= 160 ? "auto" : "hidden";
+      }
+
+      function addListeners() {
+        launcher.onclick = toggleChat;
+        sendBtn.onclick = sendMessage;
+        textInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+          }
         });
-      } else {
-        _mount();
+        textInput.addEventListener("input", adjustInputHeight);
       }
-    } catch(e) {
-      console.warn("[ChatWidget] Init error:", e);
-    }
-  }
 
-  function _mount() {
-    injectCSS();
-    buildDOM();
-    addListeners();
-    appendBotMessage(cfg.welcomeMessage);
-  }
-
-  function injectCSS() {
-    const style = document.createElement("style");
-    style.textContent = CSS.replace(/var\(--cw-primary\)/g, cfg.primaryColor);
-    (document.head || document.documentElement).appendChild(style);
-  }
-
-  function buildDOM() {
-    const posClass = cfg.position === "bottom-left" ? "bl" : "br";
-
-    launcher = el("button", `cw-launcher cw-launcher-${posClass}`);
-    launcher.innerHTML = iconChat();
-    launcher.setAttribute("aria-label", "Open chat");
-
-    badge = el("span", "cw-badge");
-    badge.textContent = "1";
-    badge.style.display = "none";
-    launcher.appendChild(badge);
-
-    chatWindow = el("div", `cw-window cw-window-${posClass} cw-hidden`);
-    chatWindow.setAttribute("role", "dialog");
-    chatWindow.setAttribute("aria-label", cfg.title);
-
-    const header = el("div", "cw-header");
-    const headerLeft = el("div", "cw-header-left");
-    const avatar = el("div", "cw-avatar");
-    avatar.textContent = "";
-    const titleWrap = el("div", "");
-    const titleEl = el("div", "cw-title");
-    titleEl.textContent = cfg.title;
-    const subtitleEl = el("div", "cw-subtitle");
-    subtitleEl.textContent = "";
-    titleWrap.append(titleEl, subtitleEl);
-    headerLeft.append(avatar, titleWrap);
-
-    const closeBtn = el("button", "cw-close-btn");
-    closeBtn.textContent = "✕";
-    closeBtn.setAttribute("aria-label", "Close chat");
-    closeBtn.onclick = toggleChat;
-    header.append(headerLeft, closeBtn);
-
-    msgContainer = el("div", "cw-messages");
-    msgContainer.setAttribute("aria-live", "polite");
-
-    const inputRow = el("div", "cw-input-row");
-    textInput = el("textarea", "cw-text-input");
-    textInput.placeholder = "Ask me anything…";
-    textInput.rows = 1;
-    textInput.style.overflow = 'hidden';
-    sendBtn = el("button", "cw-send-btn");
-    sendBtn.innerHTML = iconSend();
-    sendBtn.setAttribute("aria-label", "Send");
-    inputRow.append(textInput, sendBtn);
-
-    chatWindow.append(header, msgContainer, inputRow);
-    document.body.append(launcher, chatWindow);
-  }
-
-  function addListeners() {
-    launcher.onclick = toggleChat;
-    sendBtn.onclick = sendMessage;
-    textInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
-    textInput.addEventListener('input', adjustInputHeight);
-  }
-
-  function adjustInputHeight() {
-    if (!textInput) return;
-    textInput.style.height = 'auto';
-    const h = Math.min(textInput.scrollHeight, 160);
-    textInput.style.height = h + 'px';
-    textInput.style.overflowY = h >= 160 ? 'auto' : 'hidden';
-  }
-
-  function toggleChat() {
-    isOpen = !isOpen;
-    chatWindow.classList.toggle("cw-hidden", !isOpen);
-    launcher.innerHTML = isOpen ? iconX() : iconChat();
-    if (isOpen) {
-      badge.style.display = "none";
-      setTimeout(() => textInput.focus(), 220);
-      scrollToBottom();
-    }
-  }
-
-  async function sendMessage() {
-    const text = textInput.value.trim();
-    if (!text) return;
-    textInput.value = "";
-    adjustInputHeight();
-    sendBtn.disabled = true;
-
-    appendUserMessage(text);
-    const typingEl = appendTyping();
-
-    try {
-      const res = await fetch(`${cfg.apiUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          websiteId: cfg.websiteId,
-          history: messages.slice(-6).map((m) => ({
-            role: m.role === "bot" ? "assistant" : "user",
-            content: m.text,
-          })),
-        }),
-      });
-      const data = await res.json();
-      typingEl.remove();
-
-      if (!data.confident && data.contactUrl) {
-        // Answer + contact-page redirect for low-confidence questions.
-        appendBotMessage(data.answer, data.source, data.contactUrl);
-      } else {
-        appendBotMessage(data.answer, data.source);
+      function toggleChat() {
+        isOpen = !isOpen;
+        chatWindow.classList.toggle("cw-hidden", !isOpen);
+        launcher.innerHTML = isOpen ? iconX() : iconChat();
+        if (isOpen) {
+          badge.style.display = "none";
+          setTimeout(() => {
+            if (leadStep && leadInputEl) {
+              leadInputEl.focus();
+            } else {
+              textInput.focus();
+            }
+          }, 220);
+          scrollToBottom();
+        }
       }
-    } catch (err) {
-      typingEl.remove();
-      appendBotMessage("Sorry, I couldn't connect to the server. Please try again.");
-    } finally {
-      sendBtn.disabled = false;
-      if (!isOpen) { badge.style.display = "flex"; }
-      scrollToBottom();
+
+      async function sendMessage() {
+        if (leadStep && leadStep !== "saving" && leadStep !== "done") {
+          handleLeadInput(textInput.value.trim());
+          textInput.value = "";
+          adjustInputHeight();
+          return;
+        }
+
+        const text = textInput.value.trim();
+        if (!text) return;
+        textInput.value = "";
+        adjustInputHeight();
+        sendBtn.disabled = true;
+
+        appendUserMessage(text);
+        const typingEl = appendTyping();
+
+        try {
+          const res = await fetch(`${cfg.apiUrl}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: text,
+              websiteId: cfg.websiteId,
+              websiteName: cfg.websiteName || cfg.title,
+              history: messages.slice(-6).map((m) => ({
+                role: m.role === "bot" ? "assistant" : "user",
+                content: m.text,
+              })),
+            }),
+          });
+          const data = await res.json();
+          typingEl.remove();
+
+          if (!data.confident && data.action === "collect_lead") {
+            appendBotMessage(data.answer);
+            setTimeout(() => startLeadCapture(), 400);
+          } else {
+            appendBotMessage(data.answer, data.source);
+          }
+        } catch (err) {
+          typingEl.remove();
+          appendBotMessage("Sorry, I couldn't connect to the server. Please try again.");
+        } finally {
+          sendBtn.disabled = false;
+          if (!isOpen) badge.style.display = "flex";
+          scrollToBottom();
+        }
+      }
+
+      function startLeadCapture() {
+        const siteName = cfg.websiteName || cfg.title;
+        leadStep = "name";
+        leadData = {};
+        setMainInputEnabled(false);
+        appendLeadPrompt(
+          `No problem! Someone from the ${siteName} team will reach out to you. What's your name?`,
+          "Your name",
+          (val) => {
+            if (!val) return;
+            appendUserMessage(val);
+            leadData.name = val;
+            leadStep = "email";
+            appendLeadPrompt(
+              `Nice to meet you, ${val}! What's your email address?`,
+              "your@email.com",
+              (v2) => {
+                if (!v2 || !v2.includes("@")) {
+                  appendBotMessage("Please enter a valid email address.");
+                  appendLeadPrompt("What's your email address?", "your@email.com", handleEmailSubmit);
+                  return;
+                }
+                handleEmailSubmit(v2);
+              }
+            );
+          }
+        );
+      }
+
+      function handleEmailSubmit(val) {
+        appendUserMessage(val);
+        leadData.email = val;
+        leadStep = "mobile";
+        appendLeadPrompt(
+          "Got it! And your mobile number?",
+          "e.g. 9876543210",
+          (v3) => {
+            if (!v3) return;
+            appendUserMessage(v3);
+            leadData.mobile = v3;
+            submitLead();
+          }
+        );
+      }
+
+      function appendLeadPrompt(botText, placeholder, onSubmit) {
+        appendBotMessage(botText);
+
+        const wrap = el("div", "cw-msg");
+        const bubble = el("div", "cw-bubble cw-bubble-bot");
+
+        const row = el("div", "cw-lead-input-row");
+        const input = el("input", "cw-lead-input");
+        input.type = "text";
+        input.placeholder = placeholder;
+        leadInputEl = input;
+
+        const submitBtn = el("button", "cw-lead-submit");
+        submitBtn.textContent = "→";
+
+        const skipBtn = el("button", "cw-skip-btn");
+        skipBtn.textContent = "Skip / Cancel";
+        skipBtn.onclick = cancelLeadCapture;
+
+        function doSubmit() {
+          const val = input.value.trim();
+          submitBtn.disabled = true;
+          input.disabled = true;
+          onSubmit(val);
+        }
+
+        submitBtn.onclick = doSubmit;
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); doSubmit(); }
+        });
+
+        row.append(input, submitBtn);
+        bubble.append(row, skipBtn);
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        scrollToBottom();
+
+        setTimeout(() => input.focus(), 50);
+      }
+
+      async function submitLead() {
+        const siteName = cfg.websiteName || cfg.title;
+        leadStep = "saving";
+        const typingEl = appendTyping();
+
+        try {
+          const res = await fetch(`${cfg.apiUrl}/api/leads/${cfg.websiteId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(leadData),
+          });
+          typingEl.remove();
+
+          if (res.ok) {
+            leadStep = "done";
+            appendBotMessage(
+              `Thanks, ${leadData.name}! The ${siteName} team has your details and will reach out to you at ${leadData.email} soon. Is there anything else I can help you with?`
+            );
+          } else {
+            const err = await res.json().catch(() => ({}));
+            appendBotMessage(
+              "Sorry, I couldn't save your details right now. Please try reaching out directly."
+            );
+            console.warn("[ChatWidget] Lead save failed:", err);
+            leadStep = null;
+          }
+        } catch (e) {
+          typingEl.remove();
+          appendBotMessage("Network error — couldn't save your details. Please try again.");
+          leadStep = null;
+        } finally {
+          setMainInputEnabled(true);
+          leadInputEl = null;
+          scrollToBottom();
+        }
+      }
+
+      function cancelLeadCapture() {
+        leadStep = null;
+        leadData = {};
+        leadInputEl = null;
+        setMainInputEnabled(true);
+        appendBotMessage("No worries! Feel free to ask me anything else.");
+        scrollToBottom();
+      }
+
+      function setMainInputEnabled(enabled) {
+        textInput.disabled = !enabled;
+        sendBtn.disabled = !enabled;
+        textInput.placeholder = enabled ? "Ask me anything…" : "Please fill in the form above…";
+      }
+
+      function appendUserMessage(text) {
+        const wrap = el("div", "cw-msg cw-msg-user");
+        const bubble = el("div", "cw-bubble cw-bubble-user");
+        bubble.textContent = text;
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        messages.push({ role: "user", text });
+        scrollToBottom();
+      }
+
+      function appendBotMessage(text, source) {
+        const wrap = el("div", "cw-msg");
+        const bubble = el("div", "cw-bubble cw-bubble-bot");
+        bubble.textContent = text;
+
+        if (source) {
+          try {
+            const chip = document.createElement("a");
+            chip.href = source;
+            chip.target = "_blank";
+            chip.rel = "noopener noreferrer";
+            chip.className = "cw-source-chip";
+            const u = new URL(source);
+            chip.textContent = "🔗 " + (u.pathname === "/" ? u.hostname : u.pathname);
+            const chipRow = el("div", "");
+            chipRow.appendChild(chip);
+            bubble.appendChild(chipRow);
+          } catch {}
+        }
+
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        messages.push({ role: "bot", text, source });
+        scrollToBottom();
+        return wrap;
+      }
+
+      function appendTyping() {
+        const wrap = el("div", "cw-msg");
+        const bubble = el("div", "cw-bubble cw-bubble-bot cw-typing");
+        bubble.innerHTML = `<span class="cw-dot"></span><span class="cw-dot"></span><span class="cw-dot"></span>`;
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        scrollToBottom();
+        return wrap;
+      }
+
+      function scrollToBottom() {
+        requestAnimationFrame(() => { msgContainer.scrollTop = msgContainer.scrollHeight; });
+      }
+
+      function el(tag, className) {
+        const e = document.createElement(tag);
+        if (className) e.className = className;
+        return e;
+      }
+
+      function iconChat() {
+        return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>`;
+      }
+      function iconX() {
+        return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+      }
+      function iconSend() {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
+      }
+
+      window.ChatWidget = { init };
+    } catch (e) {
+      console.warn("[ChatWidget] Failed to load:", e);
     }
-  }
-
-  function appendUserMessage(text) {
-    const wrap = el("div", "cw-msg cw-msg-user");
-    const bubble = el("div", "cw-bubble cw-bubble-user");
-    bubble.textContent = text;
-    wrap.appendChild(bubble);
-    msgContainer.appendChild(wrap);
-    messages.push({ role: "user", text });
-    scrollToBottom();
-  }
-
-  function appendBotMessage(text, source, contactUrl) {
-    const wrap = el("div", "cw-msg");
-    const bubble = el("div", "cw-bubble cw-bubble-bot");
-    bubble.textContent = text;
-
-    if (source) {
-      try {
-        const chip = document.createElement("a");
-        chip.href = source;
-        chip.target = "_blank";
-        chip.rel = "noopener noreferrer";
-        chip.className = "cw-source-chip";
-        // Show just the pathname for cleanliness
-        const u = new URL(source);
-        chip.textContent = "🔗 " + (u.pathname === "/" ? u.hostname : u.pathname);
-        const chipRow = el("div", "");
-        chipRow.appendChild(chip);
-        bubble.appendChild(chipRow);
-      } catch { /* bad url, skip */ }
-    }
-
-    if (contactUrl) {
-      const escalate = el("div", "cw-escalate");
-      const btn = document.createElement("a");
-      btn.href = contactUrl;
-      btn.target = "_blank";
-      btn.rel = "noopener noreferrer";
-      btn.className = "cw-contact-btn";
-      btn.innerHTML = "✉️ Contact Us";
-      escalate.appendChild(btn);
-      bubble.appendChild(escalate);
-    }
-
-    wrap.appendChild(bubble);
-    msgContainer.appendChild(wrap);
-    messages.push({ role: "bot", text, source });
-    scrollToBottom();
-    return wrap;
-  }
-
-  function appendTyping() {
-    const wrap = el("div", "cw-msg");
-    const bubble = el("div", "cw-bubble cw-bubble-bot cw-typing");
-    bubble.innerHTML = `<span class="cw-dot"></span><span class="cw-dot"></span><span class="cw-dot"></span>`;
-    wrap.appendChild(bubble);
-    msgContainer.appendChild(wrap);
-    scrollToBottom();
-    return wrap;
-  }
-
-  function scrollToBottom() {
-    requestAnimationFrame(() => { msgContainer.scrollTop = msgContainer.scrollHeight; });
-  }
-
-  function el(tag, className) {
-    const e = document.createElement(tag);
-    if (className) e.className = className;
-    return e;
-  }
-
-  function iconChat() {
-    return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>`;
-  }
-  function iconX() {
-    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-  }
-  function iconSend() {
-    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
-  }
-
-  window.ChatWidget = { init };
-} catch(e) { console.warn("[ChatWidget] Failed to load:", e); }
+  })();
 })();

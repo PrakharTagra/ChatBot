@@ -16,17 +16,18 @@ const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon
 const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you|ok|okay|sure|great|cool|awesome|bye|goodbye|see you|cheers)\b/i;
 
 router.post("/", async (req, res) => {
-  const { message, websiteId, history = [] } = req.body;
+  const { message, websiteId, history = [], websiteName } = req.body;
 
   if (!message || !websiteId) {
     return res.status(400).json({ error: "message and websiteId are required." });
   }
 
   const trimmed = message.trim();
+  const siteName = websiteName || websiteId;
 
   if (GREETING_RE.test(trimmed) || SMALL_TALK_RE.test(trimmed)) {
     return res.json({
-      answer: "Hello! I'm here to help you with any questions about this website. What would you like to know?",
+      answer: `Hello! I'm ${siteName}'s assistant. How can I help you today?`,
       source: null,
       confident: true,
     });
@@ -44,7 +45,7 @@ router.post("/", async (req, res) => {
 
     if (ranked.length === 0) {
       return res.json({
-        answer: "I don't have any information about this website yet. Please scrape it first via the admin panel.",
+        answer: `I don't have any information about ${siteName} yet. Please scrape it first via the admin panel.`,
         source: null,
         confident: true,
       });
@@ -52,14 +53,6 @@ router.post("/", async (req, res) => {
 
     const topScore = ranked[0].score;
     const confident = topScore >= SIMILARITY_THRESHOLD;
-
-    let siteBaseUrl = null;
-    try {
-      const u = new URL(ranked[0].url);
-      siteBaseUrl = u.origin;
-    } catch {
-      
-    }
 
     const context = ranked
       .map((c, i) => `[Source ${i + 1}: ${c.url}]\n${c.content}`)
@@ -71,15 +64,18 @@ router.post("/", async (req, res) => {
     }));
 
     const systemPrompt = confident
-      ? `You are a helpful assistant for this website. Answer using ONLY the context below.
-Be concise and friendly. Plain text only — no markdown, no asterisks, no [text](url) links, no bullet points.
-Write in short paragraphs. If you reference a page, mention its name naturally in the sentence.
+      ? `You are the official AI assistant speaking on behalf of ${siteName}. 
+Speak in first person as ${siteName} — say "we", "our", "us" when referring to the organisation.
+Answer using ONLY the context below. Be concise and friendly.
+Plain text only — no markdown, no asterisks, no [text](url) links, no bullet points.
+Write in short paragraphs. Never say "the website" — always say "${siteName}" by name.
 
 CONTEXT:
 ${context}`
-      : `You are a helpful assistant. No relevant content was found for this question.
-    Write ONE short plain sentence only: say you couldn't find that information but can connect them with someone if they leave their details.
-No markdown, no links, no contact URL — just the plain sentence.`;
+      : `You are the assistant for ${siteName}.
+No relevant content was found for this question.
+Write ONE short plain sentence only: say ${siteName} couldn't find that information but can connect them with someone from the team if they leave their details.
+No markdown, no links — just the plain sentence. Refer to the organisation as "${siteName}", never as "the website".`;
 
     const completion = await getGroq().chat.completions.create({
       model: "llama-3.1-8b-instant",
