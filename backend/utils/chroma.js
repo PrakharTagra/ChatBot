@@ -1,18 +1,11 @@
-import { ChromaClient } from "chromadb";
+import { CloudClient } from "chromadb";
 
 let client = null;
 
 function getClient() {
   if (!client) {
-    client = new ChromaClient({
-      path: process.env.CHROMA_API_URL,
-      auth: {
-        provider: "token",
-        credentials: process.env.CHROMA_API_KEY,
-      },
-      tenant: process.env.CHROMA_TENANT,
-      database: process.env.CHROMA_DATABASE,
-    });
+    // CloudClient auto-reads CHROMA_API_KEY, CHROMA_TENANT, CHROMA_DATABASE from env
+    client = new CloudClient();
   }
   return client;
 }
@@ -27,8 +20,9 @@ function collectionName(websiteId) {
 export async function getOrCreateCollection(websiteId) {
   return getClient().getOrCreateCollection({
     name: collectionName(websiteId),
-    // Store the original websiteId in collection metadata
-    // so we can recover it when listing all collections
+    // embeddingFunction: null tells Chroma we'll provide our own embeddings
+    // (avoids the DefaultEmbeddingFunction / @chroma-core/default-embed error)
+    embeddingFunction: null,
     metadata: { websiteId },
   });
 }
@@ -42,17 +36,18 @@ export async function deleteCollection(websiteId) {
 }
 
 // Returns array of { websiteId, url, chunks, lastScraped }
-// We read these from the metadata of the first item in each collection
 export async function listSites() {
   const collections = await getClient().listCollections();
 
   const sites = await Promise.all(
     collections.map(async (col) => {
       const websiteId = col.metadata?.websiteId || col.name;
-      const collection = await getClient().getCollection({ name: col.name });
+      const collection = await getClient().getCollection({
+        name: col.name,
+        embeddingFunction: null,
+      });
       const count = await collection.count();
 
-      // Peek at one item to get url + lastScraped from its metadata
       const peek = await collection.peek({ limit: 1 });
       const url = peek.metadatas?.[0]?.url || "";
       const lastScraped = peek.metadatas?.[0]?.lastScraped || null;
@@ -77,7 +72,7 @@ export async function queryChroma(websiteId, queryEmbedding, topK = 3) {
   });
 
   // Chroma gives cosine DISTANCE (0 = identical, 2 = opposite)
-  // Convert to SIMILARITY (1 = identical) to match your old code's logic
+  // Convert to SIMILARITY (1 = identical)
   return results.ids[0].map((id, i) => ({
     id,
     content:  results.documents[0][i],
