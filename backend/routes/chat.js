@@ -35,6 +35,10 @@ router.post("/", async (req, res) => {
   try {
     const queryEmbedding = await getEmbedding(trimmed);
     const ranked = await queryChroma(websiteId, queryEmbedding, TOP_K);
+    console.log("TOP RESULTS:", ranked.map(r => ({
+      score: r.score.toFixed(3),
+      snippet: r.content.slice(0, 80)
+    })));
 
     if (ranked.length === 0) {
       return res.json({
