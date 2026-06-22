@@ -1,7 +1,7 @@
 import express from "express";
 import Groq from "groq-sdk";
-import { getEmbedding, cosineSimilarity } from "../utils/embeddings.js";
-import Chunk from "../models/Chunk.js";
+import { getEmbedding } from "../utils/embeddings.js";
+import { queryChroma } from "../utils/chroma.js";
 
 const router = express.Router();
 
@@ -34,9 +34,9 @@ router.post("/", async (req, res) => {
 
   try {
     const queryEmbedding = await getEmbedding(trimmed);
-    const chunks = await Chunk.find({ websiteId }).lean();
+    const ranked = await queryChroma(websiteId, queryEmbedding, TOP_K);
 
-    if (chunks.length === 0) {
+    if (ranked.length === 0) {
       return res.json({
         answer: "I don't have any information about this website yet. Please scrape it first via the admin panel.",
         source: null,
@@ -44,17 +44,13 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const ranked = chunks
-      .map((c) => ({ ...c, score: cosineSimilarity(queryEmbedding, c.embedding) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, TOP_K);
-
     const topScore = ranked[0].score;
     const confident = topScore >= SIMILARITY_THRESHOLD;
 
+    // siteBaseUrl comes from ranked results now, not raw chunks
     let siteBaseUrl = null;
     try {
-      const u = new URL(chunks[0].url);
+      const u = new URL(ranked[0].url);
       siteBaseUrl = u.origin;
     } catch {
       // ignore malformed source URLs
@@ -108,15 +104,15 @@ No markdown, no links, no contact URL — just the plain sentence.`;
 
 function stripMarkdown(text) {
   return text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")  // [text](url) → text
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // images
-    .replace(/^#{1,6}\s+/gm, "")              // headings
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")       // bold
-    .replace(/(\*|_)(.*?)\1/g, "$2")          // italic
-    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")   // code
-    .replace(/^\s*[-*+]\s+/gm, "• ")          // bullets → •
-    .replace(/^\s*\d+\.\s+/gm, "")            // numbered lists
-    .replace(/\n{3,}/g, "\n\n")               // excess newlines
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")
+    .replace(/^\s*[-*+]\s+/gm, "• ")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
