@@ -4,8 +4,8 @@ import { URL } from "url";
 import { getEmbedding } from "./utils/embeddings.js";
 import { getOrCreateCollection, deleteCollection } from "./utils/chroma.js";
 
-const CHUNK_SIZE = 200;
-const CHUNK_OVERLAP = 50;
+const CHUNK_SIZE = 150;
+const CHUNK_OVERLAP = 30;
 const MAX_PAGES = 100;
 
 function extractLinks($, baseUrl) {

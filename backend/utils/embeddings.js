@@ -4,7 +4,7 @@ let embedder = null;
 
 async function getEmbedder() {
   if (!embedder) {
-    console.log("⏳ Loading embedding model (first run downloads ~25MB)...");
+    console.log("⏳ Loading embedding model...");
     embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
     console.log("✅ Embedding model ready.");
   }
@@ -13,7 +13,11 @@ async function getEmbedder() {
 
 export async function getEmbedding(text) {
   const model = await getEmbedder();
-  const output = await model(text.slice(0, 512), {
+  
+  // Truncate by WORDS not characters — model limit is 256 tokens (~180 words)
+  const truncated = text.split(" ").slice(0, 180).join(" ");
+  
+  const output = await model(truncated, {
     pooling: "mean",
     normalize: true,
   });
