@@ -33,7 +33,9 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const queryEmbedding = await getEmbedding(trimmed);
+    const recentContext = history.slice(-2).map(m => m.content).join(" ");
+    const contextualQuery = recentContext ? `${recentContext} ${trimmed}` : trimmed;
+    const queryEmbedding = await getEmbedding(contextualQuery);
     const ranked = await queryChroma(websiteId, queryEmbedding, TOP_K);
     console.log("TOP RESULTS:", ranked.map(r => ({
       score: r.score.toFixed(3),
