@@ -240,13 +240,14 @@
         const header = el("div", "cw-header");
         const headerLeft = el("div", "cw-header-left");
 
+        const avatar = el("div", "cw-avatar");  // ✅ declared at outer scope
         if (cfg.logoUrl) {
-          const avatar = el("div", "cw-avatar");
           const img = document.createElement("img");
           img.src = cfg.logoUrl;
           img.alt = cfg.title;
           avatar.appendChild(img);
-          headerLeft.appendChild(avatar);
+        } else {
+          avatar.textContent = "💬";  // fallback icon when no logo provided
         }
 
         const titleWrap = el("div", "");
