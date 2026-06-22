@@ -20,10 +20,11 @@ function collectionName(websiteId) {
 export async function getOrCreateCollection(websiteId) {
   return getClient().getOrCreateCollection({
     name: collectionName(websiteId),
-    // embeddingFunction: null tells Chroma we'll provide our own embeddings
-    // (avoids the DefaultEmbeddingFunction / @chroma-core/default-embed error)
     embeddingFunction: null,
-    metadata: { websiteId },
+    metadata: { 
+      websiteId,
+      "hnsw:space": "cosine"
+    },
   });
 }
 
