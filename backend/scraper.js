@@ -36,18 +36,21 @@ export async function scrapeAndIndex(startUrl, websiteId) {
   const collection = await getOrCreateCollection(websiteId);
   console.log(`Cleared and recreated collection for: ${websiteId}`);
 
-  let chunksStored = 0;
-  let pagesScraped = 0;
   const scrapedAt = new Date().toISOString();
   const startHostname = new URL(startUrl).hostname;
 
+  // ---------------------------------------------------------------------
+  // PHASE 1 — Crawl only. No embedding calls happen in here, so Chromium
+  // never has to share memory with the embedding model. Results are just
+  // held in this array until the browser is fully closed below.
+  // ---------------------------------------------------------------------
+  const pages = []; // { url, title, chunks: string[] }
+
   const crawler = new PlaywrightCrawler({
     maxRequestsPerCrawl: MAX_PAGES,
-    maxConcurrency: 5, // tune based on target site tolerance / your rate limits
+    maxConcurrency: 1, // explicit, not just implied by memory pressure
     requestHandlerTimeoutSecs: 30,
 
-    // Block heavy resources — we only need text, this is the Puppeteer
-    // interception trick but expressed through Crawlee's hook system.
     preNavigationHooks: [
       async ({ page }) => {
         await page.route("**/*", (route) => {
@@ -64,8 +67,6 @@ export async function scrapeAndIndex(startUrl, websiteId) {
     async requestHandler({ request, page, enqueueLinks, parseWithCheerio, log }) {
       log.info(`Scraping: ${request.url}`);
 
-      // Wait for likely content containers before extracting; falls through
-      // harmlessly if none exist (e.g. plain static pages).
       await page
         .waitForSelector("main, article, .content, #content", { timeout: 5000 })
         .catch(() => {});
@@ -78,9 +79,6 @@ export async function scrapeAndIndex(startUrl, websiteId) {
         return;
       }
 
-      pagesScraped++;
-
-      // Same-domain link discovery, replacing your manual extractLinks/queue.
       await enqueueLinks({
         strategy: "same-domain",
         transformRequestFunction: (req) => {
@@ -99,22 +97,8 @@ export async function scrapeAndIndex(startUrl, websiteId) {
       const chunks = chunkText(text);
       log.info(`${chunks.length} chunks from "${title}"`);
 
-      const ids = [];
-      const embeddings = [];
-      const documents = [];
-      const metadatas = [];
-
-      for (let i = 0; i < chunks.length; i++) {
-        const embedding = await getEmbedding(chunks[i]);
-        ids.push(`${websiteId}-${chunksStored + i}`);
-        embeddings.push(embedding);
-        documents.push(chunks[i]);
-        metadatas.push({ url: request.url, title, websiteId, lastScraped: scrapedAt });
-      }
-
-      if (ids.length > 0) {
-        await collection.upsert({ ids, embeddings, documents, metadatas });
-        chunksStored += chunks.length;
+      if (chunks.length > 0) {
+        pages.push({ url: request.url, title, chunks });
       }
     },
 
@@ -124,6 +108,39 @@ export async function scrapeAndIndex(startUrl, websiteId) {
   });
 
   await crawler.run([startUrl]);
+  // Crawlee tears down its browser pool when run() resolves, but we close
+  // explicitly too so there's no ambiguity about when Chromium's memory
+  // is actually released before phase 2 starts.
+  await crawler.teardown();
+
+  const pagesScraped = pages.length;
+  console.log(`Crawl finished. Pages with content: ${pagesScraped}. Browser closed — starting embeddings.`);
+
+  // ---------------------------------------------------------------------
+  // PHASE 2 — Embeddings + storage. Runs entirely after the browser is
+  // gone, so this is the only thing holding memory at this point.
+  // ---------------------------------------------------------------------
+  let chunksStored = 0;
+
+  for (const { url, title, chunks } of pages) {
+    const ids = [];
+    const embeddings = [];
+    const documents = [];
+    const metadatas = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      const embedding = await getEmbedding(chunks[i]);
+      ids.push(`${websiteId}-${chunksStored + i}`);
+      embeddings.push(embedding);
+      documents.push(chunks[i]);
+      metadatas.push({ url, title, websiteId, lastScraped: scrapedAt });
+    }
+
+    if (ids.length > 0) {
+      await collection.upsert({ ids, embeddings, documents, metadatas });
+      chunksStored += chunks.length;
+    }
+  }
 
   console.log(`Done! Pages: ${pagesScraped} | Chunks: ${chunksStored}`);
   return { pagesScraped, chunksStored };
