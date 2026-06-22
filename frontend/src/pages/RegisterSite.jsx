@@ -21,10 +21,11 @@ export default function RegisterSite() {
   const [title, setTitle] = useState('')
   const [welcomeMsg, setWelcomeMsg] = useState('Hi! I can answer questions about this website. What would you like to know?')
   const [primaryColor, setPrimaryColor] = useState('#6c63ff')
+  const [logoUrl, setLogoUrl] = useState('')
   const [mongoUri, setMongoUri] = useState('')
   const [idTouched, setIdTouched] = useState(false)
 
-  const [step, setStep] = useState('form')
+  const [step, setStep] = useState('form') // form | scraping | done
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [logs, setLogs] = useState([])
@@ -75,7 +76,7 @@ export default function RegisterSite() {
       apiUrl: "${API}",
       title: "${title || 'Website Assistant'}",
       welcomeMessage: "${welcomeMsg}",
-      primaryColor: "${primaryColor}"
+      primaryColor: "${primaryColor}"${logoUrl.trim() ? `,\n      logoUrl: "${logoUrl.trim()}"` : ''}
     });
   });
 </script>`
@@ -84,6 +85,7 @@ export default function RegisterSite() {
     <div className="register-page fade-in">
       {step !== 'done' && (
         <div className="register-grid">
+          {/* Left: Form */}
           <div className="register-form-col">
             <div className="card">
               <h2 className="form-section-title">Website Details</h2>
@@ -130,6 +132,19 @@ export default function RegisterSite() {
                   onChange={e => setTitle(e.target.value)}
                   disabled={step === 'scraping'}
                 />
+              </div>
+
+              <div className="field">
+                <label>Logo URL <span style={{ fontWeight: 400, color: 'var(--text2)' }}>(optional)</span></label>
+                <input
+                  className="input"
+                  type="url"
+                  placeholder="https://yourwebsite.com/logo.png"
+                  value={logoUrl}
+                  onChange={e => setLogoUrl(e.target.value)}
+                  disabled={step === 'scraping'}
+                />
+                <p className="field-hint">A publicly accessible image URL. Shown as a circular avatar in the chat header. Leave blank to show only the title.</p>
               </div>
 
               <div className="field">
@@ -183,6 +198,7 @@ export default function RegisterSite() {
             </div>
           </div>
 
+          {/* Right: Logs + Preview */}
           <div className="register-side-col">
             {logs.length > 0 && (
               <div className="card log-card">

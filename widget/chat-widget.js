@@ -10,6 +10,7 @@
         welcomeMessage: "Hi! I can answer questions about this website. What would you like to know?",
         primaryColor: "#6c63ff",
         position: "bottom-right",
+        logoUrl: "",
       };
 
       let cfg = Object.assign({}, DEFAULTS);
@@ -64,6 +65,10 @@
       width: 32px; height: 32px;
       background: rgba(255,255,255,0.25); border-radius: 50%;
       display: flex; align-items: center; justify-content: center; font-size: 15px;
+      flex-shrink: 0; overflow: hidden;
+    }
+    .cw-avatar img {
+      width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
     }
     .cw-title { font-size: 14px; font-weight: 700; color: #fff; }
     .cw-subtitle { font-size: 11px; color: rgba(255,255,255,0.75); margin-top: 1px; }
@@ -182,9 +187,11 @@
       let messages = [];
       let launcher, badge, chatWindow, msgContainer, textInput, sendBtn;
 
+      // Lead capture state
+      // steps: null | "name" | "email" | "mobile" | "saving" | "done"
       let leadStep = null;
       let leadData = {};
-      let leadInputEl = null;
+      let leadInputEl = null; // reference to the active input element
 
       function init(userConfig) {
         try {
@@ -232,8 +239,16 @@
 
         const header = el("div", "cw-header");
         const headerLeft = el("div", "cw-header-left");
-        const avatar = el("div", "cw-avatar");
-        avatar.textContent = "🤖";
+
+        if (cfg.logoUrl) {
+          const avatar = el("div", "cw-avatar");
+          const img = document.createElement("img");
+          img.src = cfg.logoUrl;
+          img.alt = cfg.title;
+          avatar.appendChild(img);
+          headerLeft.appendChild(avatar);
+        }
+
         const titleWrap = el("div", "");
         const titleEl = el("div", "cw-title");
         titleEl.textContent = cfg.title;
@@ -303,6 +318,7 @@
       }
 
       async function sendMessage() {
+        // If we're in lead collection mode, forward to lead handler
         if (leadStep && leadStep !== "saving" && leadStep !== "done") {
           handleLeadInput(textInput.value.trim());
           textInput.value = "";
@@ -337,6 +353,7 @@
 
           if (!data.confident && data.action === "collect_lead") {
             appendBotMessage(data.answer);
+            // Kick off lead capture flow
             setTimeout(() => startLeadCapture(), 400);
           } else {
             appendBotMessage(data.answer, data.source);
@@ -351,9 +368,12 @@
         }
       }
 
+      // ─── Lead Capture Flow ───────────────────────────────────────────────────
+
       function startLeadCapture() {
         leadStep = "name";
         leadData = {};
+        // Disable main input row
         setMainInputEnabled(false);
         appendLeadPrompt(
           "No problem! I can have someone from the team reach out to you. What's your name?",
@@ -485,6 +505,8 @@
         sendBtn.disabled = !enabled;
         textInput.placeholder = enabled ? "Ask me anything…" : "Please fill in the form above…";
       }
+
+      // ─── Shared helpers ──────────────────────────────────────────────────────
 
       function appendUserMessage(text) {
         const wrap = el("div", "cw-msg cw-msg-user");
