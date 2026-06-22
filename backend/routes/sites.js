@@ -3,7 +3,6 @@ import { listSites, deleteCollection } from "../utils/chroma.js";
 
 const router = express.Router();
 
-// GET /api/sites — list all indexed websites
 router.get("/", async (req, res) => {
   try {
     const sites = await listSites();
@@ -13,7 +12,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// DELETE /api/sites/:websiteId — remove a site completely
 router.delete("/:websiteId", async (req, res) => {
   try {
     await deleteCollection(req.params.websiteId);

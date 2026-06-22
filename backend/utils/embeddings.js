@@ -14,7 +14,6 @@ async function getEmbedder() {
 export async function getEmbedding(text) {
   const model = await getEmbedder();
   
-  // Truncate by WORDS not characters — model limit is 256 tokens (~180 words)
   const truncated = text.split(" ").slice(0, 180).join(" ");
   
   const output = await model(truncated, {

@@ -87,7 +87,6 @@ export async function scrapeAndIndex(startUrl, websiteId) {
     const chunks = chunkText(text);
     console.log(`${chunks.length} chunks from "${title}"`);
 
-    // Build batch arrays for this page
     const ids = [];
     const embeddings = [];
     const documents = [];
@@ -98,11 +97,9 @@ export async function scrapeAndIndex(startUrl, websiteId) {
       ids.push(`${websiteId}-${chunksStored + i}`);
       embeddings.push(embedding);
       documents.push(chunks[i]);
-      // lastScraped stored flat as ISO string — Chroma metadata must be flat
       metadatas.push({ url, title, websiteId, lastScraped: scrapedAt });
     }
 
-    // One network call to Chroma per page, not per chunk
     await collection.upsert({ ids, embeddings, documents, metadatas });
     chunksStored += chunks.length;
   }

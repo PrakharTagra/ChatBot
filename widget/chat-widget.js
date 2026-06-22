@@ -311,7 +311,6 @@
           typingEl.remove();
 
           if (!data.confident && data.contactUrl) {
-            // Answer + contact-page redirect for low-confidence questions.
             appendBotMessage(data.answer, data.source, data.contactUrl);
           } else {
             appendBotMessage(data.answer, data.source);
