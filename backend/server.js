@@ -9,6 +9,7 @@ import scrapeRouter from "./routes/scrape.js";
 import chatRouter from "./routes/chat.js";
 import sitesRouter from "./routes/sites.js";
 import statsRouter from "./routes/stats.js";
+import leadsRouter from "./routes/leads.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -27,6 +28,7 @@ app.use("/api/scrape", scrapeRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/sites", sitesRouter);
 app.use("/api/stats", statsRouter);
+app.use("/api/leads", leadsRouter);
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 

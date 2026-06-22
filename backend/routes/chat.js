@@ -53,13 +53,12 @@ router.post("/", async (req, res) => {
     const topScore = ranked[0].score;
     const confident = topScore >= SIMILARITY_THRESHOLD;
 
-    // siteBaseUrl comes from ranked results now, not raw chunks
     let siteBaseUrl = null;
     try {
       const u = new URL(ranked[0].url);
       siteBaseUrl = u.origin;
     } catch {
-      // ignore malformed source URLs
+      
     }
 
     const context = ranked
@@ -79,7 +78,7 @@ Write in short paragraphs. If you reference a page, mention its name naturally i
 CONTEXT:
 ${context}`
       : `You are a helpful assistant. No relevant content was found for this question.
-    Write ONE short plain sentence only: say you couldn't find that information and suggest they get in touch.
+    Write ONE short plain sentence only: say you couldn't find that information but can connect them with someone if they leave their details.
 No markdown, no links, no contact URL — just the plain sentence.`;
 
     const completion = await getGroq().chat.completions.create({
@@ -100,7 +99,7 @@ No markdown, no links, no contact URL — just the plain sentence.`;
       answer,
       source,
       confident,
-      ...(!confident && siteBaseUrl ? { contactUrl: siteBaseUrl + "/contact" } : {}),
+      ...(!confident ? { action: "collect_lead" } : {}),
     });
   } catch (err) {
     console.error("Chat error:", err);

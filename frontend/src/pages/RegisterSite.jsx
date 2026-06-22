@@ -21,9 +21,10 @@ export default function RegisterSite() {
   const [title, setTitle] = useState('')
   const [welcomeMsg, setWelcomeMsg] = useState('Hi! I can answer questions about this website. What would you like to know?')
   const [primaryColor, setPrimaryColor] = useState('#6c63ff')
+  const [mongoUri, setMongoUri] = useState('')
   const [idTouched, setIdTouched] = useState(false)
 
-  const [step, setStep] = useState('form') // form | scraping | done
+  const [step, setStep] = useState('form')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [logs, setLogs] = useState([])
@@ -51,7 +52,7 @@ export default function RegisterSite() {
 
     try {
       addLog('Sending request to backend…')
-      const res = await axios.post(`${API}/api/scrape`, { url, websiteId })
+      const res = await axios.post(`${API}/api/scrape`, { url, websiteId, mongoUri: mongoUri.trim() || undefined })
       addLog(`✅ Scraped ${res.data.pagesScraped} pages`)
       addLog(`✅ Stored ${res.data.chunksStored} content chunks`)
       addLog('Done! Your widget is ready.')
@@ -83,7 +84,6 @@ export default function RegisterSite() {
     <div className="register-page fade-in">
       {step !== 'done' && (
         <div className="register-grid">
-          {/* Left: Form */}
           <div className="register-form-col">
             <div className="card">
               <h2 className="form-section-title">Website Details</h2>
@@ -152,6 +152,24 @@ export default function RegisterSite() {
                 </div>
               </div>
 
+              <div className="divider" />
+              <h2 className="form-section-title">Lead Capture (Optional)</h2>
+              <p className="form-section-desc">When the chatbot can't answer, it will ask the visitor for their name, email, and mobile — and save them to your MongoDB.</p>
+              <div className="divider" />
+
+              <div className="field">
+                <label>MongoDB Connection URI</label>
+                <input
+                  className="input mono"
+                  type="password"
+                  placeholder="mongodb+srv://user:pass@cluster.mongodb.net/dbname"
+                  value={mongoUri}
+                  onChange={e => setMongoUri(e.target.value)}
+                  disabled={step === 'scraping'}
+                />
+                <p className="field-hint">Your URI is never stored on our servers — it's held in memory only for the duration of the session. Leave blank to disable lead capture.</p>
+              </div>
+
               {error && <div className="error-box">⚠️ {error}</div>}
 
               <button
@@ -165,7 +183,6 @@ export default function RegisterSite() {
             </div>
           </div>
 
-          {/* Right: Logs + Preview */}
           <div className="register-side-col">
             {logs.length > 0 && (
               <div className="card log-card">

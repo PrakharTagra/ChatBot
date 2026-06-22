@@ -111,20 +111,32 @@
     }
     .cw-source-chip:hover { background: rgba(67,232,216,0.18); }
 
-    .cw-escalate {
-      display: flex; flex-direction: column; align-items: flex-start;
-      gap: 6px; margin-top: 4px;
+    /* Lead capture inline input */
+    .cw-lead-input-row {
+      display: flex; gap: 6px; margin-top: 8px;
     }
-
-    .cw-contact-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 7px 14px; border-radius: 20px;
-      background: var(--cw-primary); color: #fff;
-      font-size: 13px; font-weight: 600;
-      text-decoration: none; border: none; cursor: pointer;
+    .cw-lead-input {
+      flex: 1; background: #0f0f17; border: 1px solid #2a2a40;
+      border-radius: 8px; color: #e0e0f0; font-size: 13px;
+      font-family: inherit; padding: 7px 10px; outline: none;
+    }
+    .cw-lead-input:focus { border-color: var(--cw-primary); }
+    .cw-lead-input::placeholder { color: #555; }
+    .cw-lead-submit {
+      background: var(--cw-primary); color: #fff; border: none;
+      border-radius: 8px; padding: 7px 12px; cursor: pointer;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
       transition: opacity 0.15s;
     }
-    .cw-contact-btn:hover { opacity: 0.85; }
+    .cw-lead-submit:hover { opacity: 0.85; }
+    .cw-lead-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .cw-skip-btn {
+      background: none; border: none; color: #555;
+      font-size: 11px; cursor: pointer; margin-top: 6px;
+      padding: 0; text-decoration: underline;
+    }
+    .cw-skip-btn:hover { color: #888; }
 
     .cw-typing {
       display: flex; align-items: center; gap: 5px; padding: 10px 13px;
@@ -170,16 +182,16 @@
       let messages = [];
       let launcher, badge, chatWindow, msgContainer, textInput, sendBtn;
 
+      let leadStep = null;
+      let leadData = {};
+      let leadInputEl = null;
+
       function init(userConfig) {
         try {
           cfg = Object.assign({}, DEFAULTS, userConfig);
           if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", function () {
-              try {
-                _mount();
-              } catch (e) {
-                console.warn("[ChatWidget] Init error:", e);
-              }
+              try { _mount(); } catch (e) { console.warn("[ChatWidget] Init error:", e); }
             });
           } else {
             _mount();
@@ -221,12 +233,12 @@
         const header = el("div", "cw-header");
         const headerLeft = el("div", "cw-header-left");
         const avatar = el("div", "cw-avatar");
-        avatar.textContent = "";
+        avatar.textContent = "🤖";
         const titleWrap = el("div", "");
         const titleEl = el("div", "cw-title");
         titleEl.textContent = cfg.title;
         const subtitleEl = el("div", "cw-subtitle");
-        subtitleEl.textContent = "";
+        subtitleEl.textContent = "Online";
         titleWrap.append(titleEl, subtitleEl);
         headerLeft.append(avatar, titleWrap);
 
@@ -243,7 +255,7 @@
         textInput = el("textarea", "cw-text-input");
         textInput.placeholder = "Ask me anything…";
         textInput.rows = 1;
-        textInput.style.overflow = 'hidden';
+        textInput.style.overflow = "hidden";
         sendBtn = el("button", "cw-send-btn");
         sendBtn.innerHTML = iconSend();
         sendBtn.setAttribute("aria-label", "Send");
@@ -255,10 +267,10 @@
 
       function adjustInputHeight() {
         if (!textInput) return;
-        textInput.style.height = 'auto';
+        textInput.style.height = "auto";
         const h = Math.min(textInput.scrollHeight, 160);
-        textInput.style.height = h + 'px';
-        textInput.style.overflowY = h >= 160 ? 'auto' : 'hidden';
+        textInput.style.height = h + "px";
+        textInput.style.overflowY = h >= 160 ? "auto" : "hidden";
       }
 
       function addListeners() {
@@ -270,7 +282,7 @@
             sendMessage();
           }
         });
-        textInput.addEventListener('input', adjustInputHeight); // still works fine
+        textInput.addEventListener("input", adjustInputHeight);
       }
 
       function toggleChat() {
@@ -279,12 +291,25 @@
         launcher.innerHTML = isOpen ? iconX() : iconChat();
         if (isOpen) {
           badge.style.display = "none";
-          setTimeout(() => textInput.focus(), 220);
+          setTimeout(() => {
+            if (leadStep && leadInputEl) {
+              leadInputEl.focus();
+            } else {
+              textInput.focus();
+            }
+          }, 220);
           scrollToBottom();
         }
       }
 
       async function sendMessage() {
+        if (leadStep && leadStep !== "saving" && leadStep !== "done") {
+          handleLeadInput(textInput.value.trim());
+          textInput.value = "";
+          adjustInputHeight();
+          return;
+        }
+
         const text = textInput.value.trim();
         if (!text) return;
         textInput.value = "";
@@ -310,8 +335,9 @@
           const data = await res.json();
           typingEl.remove();
 
-          if (!data.confident && data.contactUrl) {
-            appendBotMessage(data.answer, data.source, data.contactUrl);
+          if (!data.confident && data.action === "collect_lead") {
+            appendBotMessage(data.answer);
+            setTimeout(() => startLeadCapture(), 400);
           } else {
             appendBotMessage(data.answer, data.source);
           }
@@ -320,11 +346,144 @@
           appendBotMessage("Sorry, I couldn't connect to the server. Please try again.");
         } finally {
           sendBtn.disabled = false;
-          if (!isOpen) {
-            badge.style.display = "flex";
-          }
+          if (!isOpen) badge.style.display = "flex";
           scrollToBottom();
         }
+      }
+
+      function startLeadCapture() {
+        leadStep = "name";
+        leadData = {};
+        setMainInputEnabled(false);
+        appendLeadPrompt(
+          "No problem! I can have someone from the team reach out to you. What's your name?",
+          "Your name",
+          (val) => {
+            if (!val) return;
+            appendUserMessage(val);
+            leadData.name = val;
+            leadStep = "email";
+            appendLeadPrompt(
+              `Nice to meet you, ${val}! What's your email address?`,
+              "your@email.com",
+              (v2) => {
+                if (!v2 || !v2.includes("@")) {
+                  appendBotMessage("Please enter a valid email address.");
+                  appendLeadPrompt("What's your email address?", "your@email.com", handleEmailSubmit);
+                  return;
+                }
+                handleEmailSubmit(v2);
+              }
+            );
+          }
+        );
+      }
+
+      function handleEmailSubmit(val) {
+        appendUserMessage(val);
+        leadData.email = val;
+        leadStep = "mobile";
+        appendLeadPrompt(
+          "Got it! And your mobile number?",
+          "e.g. 9876543210",
+          (v3) => {
+            if (!v3) return;
+            appendUserMessage(v3);
+            leadData.mobile = v3;
+            submitLead();
+          }
+        );
+      }
+
+      function appendLeadPrompt(botText, placeholder, onSubmit) {
+        appendBotMessage(botText);
+
+        const wrap = el("div", "cw-msg");
+        const bubble = el("div", "cw-bubble cw-bubble-bot");
+
+        const row = el("div", "cw-lead-input-row");
+        const input = el("input", "cw-lead-input");
+        input.type = "text";
+        input.placeholder = placeholder;
+        leadInputEl = input;
+
+        const submitBtn = el("button", "cw-lead-submit");
+        submitBtn.textContent = "→";
+
+        const skipBtn = el("button", "cw-skip-btn");
+        skipBtn.textContent = "Skip / Cancel";
+        skipBtn.onclick = cancelLeadCapture;
+
+        function doSubmit() {
+          const val = input.value.trim();
+          submitBtn.disabled = true;
+          input.disabled = true;
+          onSubmit(val);
+        }
+
+        submitBtn.onclick = doSubmit;
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); doSubmit(); }
+        });
+
+        row.append(input, submitBtn);
+        bubble.append(row, skipBtn);
+        wrap.appendChild(bubble);
+        msgContainer.appendChild(wrap);
+        scrollToBottom();
+
+        setTimeout(() => input.focus(), 50);
+      }
+
+      async function submitLead() {
+        leadStep = "saving";
+        const typingEl = appendTyping();
+
+        try {
+          const res = await fetch(`${cfg.apiUrl}/api/leads/${cfg.websiteId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(leadData),
+          });
+          typingEl.remove();
+
+          if (res.ok) {
+            leadStep = "done";
+            appendBotMessage(
+              `Thanks, ${leadData.name}! We've got your details and someone will reach out to you at ${leadData.email} soon. Is there anything else I can help you with?`
+            );
+          } else {
+            const err = await res.json().catch(() => ({}));
+            appendBotMessage(
+              "Sorry, I couldn't save your details right now. Please try reaching out directly."
+            );
+            console.warn("[ChatWidget] Lead save failed:", err);
+            leadStep = null;
+          }
+        } catch (e) {
+          typingEl.remove();
+          appendBotMessage("Network error — couldn't save your details. Please try again.");
+          leadStep = null;
+        } finally {
+          setMainInputEnabled(true);
+          leadInputEl = null;
+          scrollToBottom();
+        }
+      }
+
+      function cancelLeadCapture() {
+        leadStep = null;
+        leadData = {};
+        leadInputEl = null;
+        setMainInputEnabled(true);
+        appendBotMessage("No worries! Feel free to ask me anything else.");
+        scrollToBottom();
+      }
+
+      function setMainInputEnabled(enabled) {
+        textInput.disabled = !enabled;
+        sendBtn.disabled = !enabled;
+        textInput.placeholder = enabled ? "Ask me anything…" : "Please fill in the form above…";
       }
 
       function appendUserMessage(text) {
@@ -337,7 +496,7 @@
         scrollToBottom();
       }
 
-      function appendBotMessage(text, source, contactUrl) {
+      function appendBotMessage(text, source) {
         const wrap = el("div", "cw-msg");
         const bubble = el("div", "cw-bubble cw-bubble-bot");
         bubble.textContent = text;
@@ -354,20 +513,7 @@
             const chipRow = el("div", "");
             chipRow.appendChild(chip);
             bubble.appendChild(chipRow);
-          } catch {
-          }
-        }
-
-        if (contactUrl) {
-          const escalate = el("div", "cw-escalate");
-          const btn = document.createElement("a");
-          btn.href = contactUrl;
-          btn.target = "_blank";
-          btn.rel = "noopener noreferrer"
-          btn.className = "cw-contact-btn";
-          btn.innerHTML = "✉️ Contact Us";
-          escalate.appendChild(btn);
-          bubble.appendChild(escalate);
+          } catch {}
         }
 
         wrap.appendChild(bubble);
@@ -388,9 +534,7 @@
       }
 
       function scrollToBottom() {
-        requestAnimationFrame(() => {
-          msgContainer.scrollTop = msgContainer.scrollHeight;
-        });
+        requestAnimationFrame(() => { msgContainer.scrollTop = msgContainer.scrollHeight; });
       }
 
       function el(tag, className) {
