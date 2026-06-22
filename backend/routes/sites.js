@@ -27,7 +27,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// DELETE /api/sites/:websiteId — delete all chunks for a site
 router.delete("/:websiteId", async (req, res) => {
   const { websiteId } = req.params;
   try {
