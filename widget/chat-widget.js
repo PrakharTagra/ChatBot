@@ -253,6 +253,14 @@
         document.body.append(launcher, chatWindow);
       }
 
+      function adjustInputHeight() {
+        if (!textInput) return;
+        textInput.style.height = 'auto';
+        const h = Math.min(textInput.scrollHeight, 160);
+        textInput.style.height = h + 'px';
+        textInput.style.overflowY = h >= 160 ? 'auto' : 'hidden';
+      }
+
       function addListeners() {
         launcher.onclick = toggleChat;
         sendBtn.onclick = sendMessage;
@@ -262,14 +270,7 @@
             sendMessage();
           }
         });
-        textInput.addEventListener('input', adjustInputHeight);
-            function adjustInputHeight() {
-              if (!textInput) return;
-              textInput.style.height = 'auto';
-              const h = Math.min(textInput.scrollHeight, 160);
-              textInput.style.height = h + 'px';
-              textInput.style.overflowY = h >= 160 ? 'auto' : 'hidden';
-            }
+        textInput.addEventListener('input', adjustInputHeight); // still works fine
       }
 
       function toggleChat() {
