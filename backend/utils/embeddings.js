@@ -1,27 +1,25 @@
-import axios from "axios";
+import { pipeline } from "@xenova/transformers";
 
-export async function getEmbedding(text, retries = 3) {
-  const truncated = text.split(" ").slice(0, 180).join(" ");
+let embedder = null;
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const res = await axios.post(
-        "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2",
-        { inputs: truncated },
-        {
-          headers: { Authorization: `Bearer ${process.env.HF_API_KEY}` },
-          timeout: 30000,
-        }
-      );
-      return res.data[0];
-    } catch (err) {
-      // HF returns 503 while model is loading — wait and retry
-      if (attempt < retries && err.response?.status === 503) {
-        console.log(`HF model loading, retrying in 10s... (${attempt}/${retries})`);
-        await new Promise(r => setTimeout(r, 10000));
-      } else {
-        throw err;
-      }
-    }
+async function getEmbedder() {
+  if (!embedder) {
+    console.log("⏳ Loading embedding model...");
+    embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+    console.log("✅ Embedding model ready.");
   }
+  return embedder;
+}
+
+export async function getEmbedding(text) {
+  const model = await getEmbedder();
+  
+  // Truncate by WORDS not characters — model limit is 256 tokens (~180 words)
+  const truncated = text.split(" ").slice(0, 180).join(" ");
+  
+  const output = await model(truncated, {
+    pooling: "mean",
+    normalize: true,
+  });
+  return Array.from(output.data);
 }
