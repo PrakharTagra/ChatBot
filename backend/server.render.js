@@ -1,10 +1,10 @@
+// server.render.js — deploy this to Render
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import scrapeRouter from "./routes/scrape.js";
 import chatRouter from "./routes/chat.js";
 import sitesRouter from "./routes/sites.js";
 import statsRouter from "./routes/stats.js";
@@ -13,17 +13,10 @@ import leadsRouter from "./routes/leads.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
-app.use(cors({
-  origin: true,
-  methods: ["GET", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
-}));
-
+app.use(cors({ origin: true, methods: ["GET", "POST", "DELETE", "OPTIONS"], allowedHeaders: ["Content-Type"] }));
 app.use(express.json());
-
 app.use("/widget", express.static(path.join(__dirname, "../widget")));
 
-app.use("/api/scrape", scrapeRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/sites", sitesRouter);
 app.use("/api/stats", statsRouter);
