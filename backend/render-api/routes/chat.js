@@ -9,7 +9,7 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
-const SIMILARITY_THRESHOLD = 0.15;
+const SIMILARITY_THRESHOLD = 0.30;
 const TOP_K = 3;
 
 const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
