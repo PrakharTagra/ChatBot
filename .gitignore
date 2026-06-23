@@ -1,4 +1,5 @@
 /backend/local-scraper/node_modules/
+/backend/local-scraper/storage/
 /backend/render-api/node_modules/
 /backend/local-scraper/.env
 /backend/render-api/.env

@@ -20,7 +20,7 @@ app.use(cors({
 
 app.use(express.json());
 
-app.use("/widget", express.static(path.join(__dirname, "../widget")));
+app.use("/widget", express.static(path.join(__dirname, "../../widget")));
 
 app.use("/api/chat", chatRouter);
 app.use("/api/sites", sitesRouter);
