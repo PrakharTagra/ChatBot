@@ -6,7 +6,6 @@ const CHUNK_SIZE = 150;
 const CHUNK_OVERLAP = 30;
 const MAX_PAGES = 100;
 
-// --- unchanged from your original file ---
 function extractText($) {
   $("script, style, nav, footer, header, noscript, iframe, img").remove();
   const title = $("title").text().trim() || $("h1").first().text().trim();
@@ -39,16 +38,11 @@ export async function scrapeAndIndex(startUrl, websiteId) {
   const scrapedAt = new Date().toISOString();
   const startHostname = new URL(startUrl).hostname;
 
-  // ---------------------------------------------------------------------
-  // PHASE 1 — Crawl only. No embedding calls happen in here, so Chromium
-  // never has to share memory with the embedding model. Results are just
-  // held in this array until the browser is fully closed below.
-  // ---------------------------------------------------------------------
-  const pages = []; // { url, title, chunks: string[] }
+  const pages = [];
 
   const crawler = new PlaywrightCrawler({
     maxRequestsPerCrawl: MAX_PAGES,
-    maxConcurrency: 1, // explicit, not just implied by memory pressure
+    maxConcurrency: 1,
     requestHandlerTimeoutSecs: 30,
 
     preNavigationHooks: [
@@ -108,18 +102,11 @@ export async function scrapeAndIndex(startUrl, websiteId) {
   });
 
   await crawler.run([startUrl]);
-  // Crawlee tears down its browser pool when run() resolves, but we close
-  // explicitly too so there's no ambiguity about when Chromium's memory
-  // is actually released before phase 2 starts.
   await crawler.teardown();
 
   const pagesScraped = pages.length;
   console.log(`Crawl finished. Pages with content: ${pagesScraped}. Browser closed — starting embeddings.`);
 
-  // ---------------------------------------------------------------------
-  // PHASE 2 — Embeddings + storage. Runs entirely after the browser is
-  // gone, so this is the only thing holding memory at this point.
-  // ---------------------------------------------------------------------
   let chunksStored = 0;
 
   for (const { url, title, chunks } of pages) {

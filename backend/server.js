@@ -4,7 +4,6 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Routes
 import scrapeRouter from "./routes/scrape.js";
 import chatRouter from "./routes/chat.js";
 import sitesRouter from "./routes/sites.js";
