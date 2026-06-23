@@ -1,17 +1,8 @@
 import express from "express";
 import mongoose from "mongoose";
+import { getSiteMongoUri } from "../utils/chroma.js";
 
 const router = express.Router();
-
-const mongoUriStore = new Map();
-
-export function setMongoUri(websiteId, uri) {
-  mongoUriStore.set(websiteId, uri);
-}
-
-export function getMongoUri(websiteId) {
-  return mongoUriStore.get(websiteId);
-}
 
 router.post("/:websiteId", async (req, res) => {
   const { websiteId } = req.params;
@@ -21,7 +12,7 @@ router.post("/:websiteId", async (req, res) => {
     return res.status(400).json({ error: "name, email, and mobile are required." });
   }
 
-  const mongoUri = mongoUriStore.get(websiteId);
+  const mongoUri = await getSiteMongoUri(websiteId);
   if (!mongoUri) {
     return res.status(404).json({ error: "No MongoDB URI configured for this website." });
   }

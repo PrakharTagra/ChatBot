@@ -1,6 +1,5 @@
 import express from "express";
 import { scrapeAndIndex } from "../scraper.js";
-import { setMongoUri } from "./leads.js";
 
 const router = express.Router();
 
@@ -17,14 +16,9 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "Invalid URL format." });
   }
 
-  if (mongoUri && mongoUri.trim()) {
-    setMongoUri(websiteId, mongoUri.trim());
-    console.log(`📦 MongoDB URI registered for websiteId="${websiteId}"`);
-  }
-
   try {
     console.log(`\n🚀 Starting scrape for websiteId="${websiteId}" at ${url}`);
-    const result = await scrapeAndIndex(url, websiteId);
+    const result = await scrapeAndIndex(url, websiteId, mongoUri);
     return res.json({
       success: true,
       websiteId,

@@ -1,6 +1,6 @@
 import { PlaywrightCrawler } from "crawlee";
 import { getEmbedding } from "./utils/embeddings.js";
-import { getOrCreateCollection, deleteCollection } from "./utils/chroma.js";
+import { getOrCreateCollection, deleteCollection, setSiteMongoUri } from "./utils/chroma.js";
 
 const CHUNK_SIZE = 150;
 const CHUNK_OVERLAP = 30;
@@ -30,10 +30,15 @@ function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
 }
 // --- end unchanged ---
 
-export async function scrapeAndIndex(startUrl, websiteId) {
+export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
   await deleteCollection(websiteId);
   const collection = await getOrCreateCollection(websiteId);
   console.log(`Cleared and recreated collection for: ${websiteId}`);
+
+  if (mongoUri && mongoUri.trim()) {
+    await setSiteMongoUri(websiteId, mongoUri.trim());
+    console.log(`Lead-capture MongoDB URI saved on Chroma collection metadata for: ${websiteId}`);
+  }
 
   const scrapedAt = new Date().toISOString();
   const startHostname = new URL(startUrl).hostname;

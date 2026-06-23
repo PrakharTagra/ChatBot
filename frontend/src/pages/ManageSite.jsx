@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import './ManageSite.css'
-
-const API = import.meta.env.VITE_API_URL || 'https://chatbot-gurp.onrender.com'
+import { SCRAPER_API, RENDER_API } from '../config'
 
 export default function ManageSite() {
   const { websiteId } = useParams()
@@ -39,7 +38,7 @@ export default function ManageSite() {
 
   async function checkBackend() {
     try {
-      await axios.get(`${API}/api/health`, { timeout: 5000 })
+      await axios.get(`${RENDER_API}/api/health`, { timeout: 5000 })
       setBackendOk(true)
     } catch {
       setBackendOk(false)
@@ -52,7 +51,7 @@ export default function ManageSite() {
     setScrapeResult(null)
     setScrapeError('')
     try {
-      const res = await axios.post(`${API}/api/scrape`, { url: newUrl, websiteId })
+      const res = await axios.post(`${SCRAPER_API}/api/scrape`, { url: newUrl, websiteId })
       setScrapeResult(res.data)
     } catch (e) {
       setScrapeError(e.response?.data?.error || e.message)
@@ -78,7 +77,7 @@ export default function ManageSite() {
 
     setChatLoading(true)
     try {
-      const res = await axios.post(`${API}/api/chat`, {
+      const res = await axios.post(`${RENDER_API}/api/chat`, {
         message: msg,
         websiteId,
         history: history.slice(-6)
@@ -110,12 +109,12 @@ export default function ManageSite() {
   }
 
   const embedSnippet = `<!-- ChatAgent Widget -->
-<script src="${API}/widget/chat-widget.js" defer></script>
+<script src="${RENDER_API}/widget/chat-widget.js" defer></script>
 <script defer>
   document.addEventListener("DOMContentLoaded", function() {
     ChatWidget.init({
       websiteId: "${websiteId}",
-      apiUrl: "${API}",
+      apiUrl: "${RENDER_API}",
       title: "Website Assistant",
       welcomeMessage: "👋 Hi! I can answer questions about this website. What would you like to know?",
       primaryColor: "#6c63ff"
@@ -174,12 +173,12 @@ export default function ManageSite() {
             <div className="divider" />
             <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Advanced Options</h4>
             <pre className="code-block">{`<!-- ChatAgent Widget -->
-<script src="${API}/widget/chat-widget.js" defer></script>
+<script src="${RENDER_API}/widget/chat-widget.js" defer></script>
 <script defer>
   document.addEventListener("DOMContentLoaded", function() {
     ChatWidget.init({
       websiteId: "${websiteId}",
-      apiUrl: "${API}",
+      apiUrl: "${RENDER_API}",
       title: "Website Assistant",
       welcomeMessage: "Hi! How can I help?",
       primaryColor: "#6c63ff",

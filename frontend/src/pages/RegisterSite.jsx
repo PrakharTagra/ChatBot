@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import './RegisterSite.css'
-
-const API = import.meta.env.VITE_API_URL || 'https://chatbot-gurp.onrender.com'
+import { SCRAPER_API, RENDER_API } from '../config'
 
 function slugify(str) {
   return str
@@ -53,7 +52,7 @@ export default function RegisterSite() {
 
     try {
       addLog('Sending request to backend…')
-      const res = await axios.post(`${API}/api/scrape`, { url, websiteId, mongoUri: mongoUri.trim() || undefined })
+      const res = await axios.post(`${SCRAPER_API}/api/scrape`, { url, websiteId, mongoUri: mongoUri.trim() || undefined })
       addLog(`✅ Scraped ${res.data.pagesScraped} pages`)
       addLog(`✅ Stored ${res.data.chunksStored} content chunks`)
       addLog('Done! Your widget is ready.')
@@ -68,12 +67,12 @@ export default function RegisterSite() {
   }
 
   const embedSnippet = `<!-- ChatAgent Widget -->
-<script src="${API}/widget/chat-widget.js" defer></script>
+<script src="${RENDER_API}/widget/chat-widget.js" defer></script>
 <script defer>
   document.addEventListener("DOMContentLoaded", function() {
     ChatWidget.init({
       websiteId: "${websiteId}",
-      apiUrl: "${API}",
+      apiUrl: "${RENDER_API}",
       title: "${title || 'Website Assistant'}",
       welcomeMessage: "${welcomeMsg}",
       primaryColor: "${primaryColor}"${logoUrl.trim() ? `,\n      logoUrl: "${logoUrl.trim()}"` : ''}

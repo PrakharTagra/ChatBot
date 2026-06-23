@@ -1,0 +1,22 @@
+{
+  "name": "chatbot-render-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Deployed to Render. Serves chat, sites, stats, and lead-capture. Never opens a browser or scrapes anything.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@xenova/transformers": "^2.17.2",
+    "chromadb": "^3.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "groq-sdk": "^0.5.0",
+    "mongoose": "^8.5.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

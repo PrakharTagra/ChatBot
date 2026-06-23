@@ -1,3 +1,4 @@
-/backend/node_modules/
-/backend/.env
-/backend/server.js
+/backend/local-scraper/node_modules/
+/backend/render-api/node_modules/
+/backend/local-scraper/.env
+/backend/render-api/.env

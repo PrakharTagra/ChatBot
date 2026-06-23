@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import './Dashboard.css'
-
-const API = import.meta.env.VITE_API_URL || 'https://chatbot-gurp.onrender.com'
+import { RENDER_API } from '../config'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -20,8 +19,8 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const [sitesRes, statsRes] = await Promise.all([
-        axios.get(`${API}/api/sites`),
-        axios.get(`${API}/api/stats`)
+        axios.get(`${RENDER_API}/api/sites`),
+        axios.get(`${RENDER_API}/api/stats`)
       ])
       setSites(sitesRes.data.sites || [])
       setStats(statsRes.data || {})
@@ -37,7 +36,7 @@ export default function Dashboard() {
   async function deleteSite(websiteId) {
     if (!confirm(`Delete "${websiteId}" and all its data? This cannot be undone.`)) return
     try {
-      await axios.delete(`${API}/api/sites/${websiteId}`)
+      await axios.delete(`${RENDER_API}/api/sites/${websiteId}`)
       setSites(prev => prev.filter(s => s.websiteId !== websiteId))
     } catch (e) {
       alert('Failed to delete site.')
