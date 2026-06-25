@@ -28,7 +28,6 @@ function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   }
   return chunks;
 }
-// --- end unchanged ---
 
 export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
   await deleteCollection(websiteId);
