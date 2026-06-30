@@ -80,6 +80,7 @@ export async function queryChroma(websiteId, queryEmbedding, topK = 3) {
     content: results.documents[0][i],
     url: results.metadatas[0][i].url,
     title: results.metadatas[0][i].title,
+    anchor: results.metadatas[0][i].anchor || "",
     score: 1 - results.distances[0][i],
   }));
 }

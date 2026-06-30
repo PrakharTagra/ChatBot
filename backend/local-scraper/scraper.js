@@ -13,16 +13,25 @@ const CHUNK_OVERLAP = 30;
 const MAX_PAGES = 300;
 
 // Paths that are low-value for a Q&A knowledge base: team bios (usually
-// just a name/title, ~1 chunk each) and category archive pages (excerpt
-// duplicates of posts that get scraped directly anyway). Skipping these
+// just a name/title, ~1 chunk each), category archive pages, and tag
+// archive pages (WordPress taxonomy pages — both are excerpt duplicates of
+// posts that get scraped directly anyway, and tag pages multiply further
+// via their own pagination, e.g. /tag/wcag/?paged=2). Skipping these
 // outright — rather than just deprioritizing — keeps the page budget
 // pointed at substantive content.
-const SKIP_PATH_PATTERNS = [/\/teams\//, /\/category\//];
+const SKIP_PATH_PATTERNS = [/\/teams\//, /\/category\//, /\/tag\//];
+
+// Non-HTML asset URLs (images, documents, etc.) that sometimes end up
+// wrapped in <a href> (e.g. lightbox links) and get picked up by
+// enqueueLinks even though preNavigationHooks already blocks loading
+// images as page *resources*. Those still count as separate page
+// navigations and burn budget on what amounts to a 404 "Page Not Found".
+const ASSET_EXTENSION_RE = /\.(png|jpe?g|gif|webp|svg|ico|bmp|pdf|docx?|xlsx?|pptx?|zip|rar|mp4|mp3|wav|avi|mov)$/i;
 
 function shouldSkipUrl(url) {
   try {
     const path = new URL(url).pathname;
-    return SKIP_PATH_PATTERNS.some((re) => re.test(path));
+    return SKIP_PATH_PATTERNS.some((re) => re.test(path)) || ASSET_EXTENSION_RE.test(path);
   } catch {
     return false;
   }
