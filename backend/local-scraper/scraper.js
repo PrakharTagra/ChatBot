@@ -10,23 +10,87 @@ function extractText($) {
   $("script, style, nav, footer, header, noscript, iframe, img").remove();
   const title = $("title").text().trim() || $("h1").first().text().trim();
   const contentSelectors = ["main", "article", ".content", ".post", "#content", "body"];
-  let rawText = "";
+  let root = null;
   for (const sel of contentSelectors) {
     const el = $(sel);
-    if (el.length) { rawText = el.text(); break; }
+    if (el.length) { root = el; break; }
   }
-  return { title, text: rawText.replace(/\s+/g, " ").trim() };
+  if (!root) return { title, blocks: [] };
+
+  // Pull text per block-level element instead of flattening the whole page
+  // into one string, and track the nearest preceding heading's id (when the
+  // page actually has one) so each block can carry a real #anchor back to
+  // the specific section it came from — not just the page URL.
+  const blocks = [];
+  let currentHeadingId = null;
+
+  root.find("h1, h2, h3, h4, h5, h6, p, li, td, blockquote").each((_, node) => {
+    const $node = $(node);
+    const tag = node.tagName?.toLowerCase();
+    const id = $node.attr("id");
+
+    if (/^h[1-6]$/.test(tag || "") && id) {
+      currentHeadingId = id;
+    }
+
+    const blockText = $node.text().replace(/\s+/g, " ").trim();
+    if (blockText) blocks.push({ text: blockText, headingId: currentHeadingId });
+  });
+
+  // Fallback for pages that don't use semantic block tags — better to have
+  // flattened text (with no anchors) than nothing.
+  if (blocks.length === 0) {
+    const flat = root.text().replace(/\s+/g, " ").trim();
+    if (flat) blocks.push({ text: flat, headingId: null });
+  }
+
+  return { title, blocks };
 }
 
-function chunkText(text, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
-  const words = text.split(" ").filter(Boolean);
+function chunkText(blocks, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   const chunks = [];
-  for (let i = 0; i < words.length; i += size - overlap) {
-    const chunk = words.slice(i, i + size).join(" ");
-    if (chunk.length > 80) chunks.push(chunk);
-    if (i + size >= words.length) break;
+  let current = [];
+  let currentWordCount = 0;
+  let currentHeadingId = null;
+
+  const flush = () => {
+    if (current.length === 0) return;
+    const text = current.join(" ");
+    if (text.length > 80) chunks.push({ text, headingId: currentHeadingId });
+  };
+
+  for (const block of blocks) {
+    const words = block.text.split(" ").filter(Boolean);
+
+    // A single block bigger than the chunk size on its own (rare — a huge
+    // paragraph with no internal structure) still needs a sliding-window
+    // split, but only for that block, not for the whole page.
+    if (words.length > size) {
+      flush();
+      current = [];
+      currentWordCount = 0;
+      for (let i = 0; i < words.length; i += size - overlap) {
+        const sub = words.slice(i, i + size).join(" ");
+        if (sub.length > 80) chunks.push({ text: sub, headingId: block.headingId });
+        if (i + size >= words.length) break;
+      }
+      continue;
+    }
+
+    if (currentWordCount + words.length > size && current.length > 0) {
+      flush();
+      current = [];
+      currentWordCount = 0;
+    }
+
+    // Anchor the chunk to whichever heading governed its first block.
+    if (current.length === 0) currentHeadingId = block.headingId;
+    current.push(block.text);
+    currentWordCount += words.length;
   }
-  return chunks;
+  flush();
+
+  return chunks; // [{ text, headingId }]
 }
 
 export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
@@ -70,9 +134,10 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
         .catch(() => {});
 
       const $ = await parseWithCheerio();
-      const { title, text } = extractText($);
+      const { title, blocks } = extractText($);
+      const totalLength = blocks.reduce((sum, b) => sum + b.text.length, 0);
 
-      if (text.length < 100) {
+      if (totalLength < 100) {
         log.info("Skipping — too short");
         return;
       }
@@ -92,7 +157,7 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
         },
       });
 
-      const chunks = chunkText(text);
+      const chunks = chunkText(blocks);
       log.info(`${chunks.length} chunks from "${title}"`);
 
       if (chunks.length > 0) {
@@ -120,11 +185,21 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
     const metadatas = [];
 
     for (let i = 0; i < chunks.length; i++) {
-      const embedding = await getEmbedding(chunks[i]);
+      const embedding = await getEmbedding(chunks[i].text);
       ids.push(`${websiteId}-${chunksStored + i}`);
       embeddings.push(embedding);
-      documents.push(chunks[i]);
-      metadatas.push({ url, title, websiteId, lastScraped: scrapedAt });
+      documents.push(chunks[i].text);
+      metadatas.push({
+        url,
+        title,
+        websiteId,
+        lastScraped: scrapedAt,
+        // Real heading id from the page, when there is one — lets us link
+        // straight to the section a chunk came from instead of just the
+        // page. Empty string (not null) since Chroma metadata values can't
+        // be null.
+        anchor: chunks[i].headingId || "",
+      });
     }
 
     if (ids.length > 0) {
