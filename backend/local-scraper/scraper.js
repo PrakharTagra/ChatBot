@@ -13,13 +13,14 @@ const CHUNK_OVERLAP = 30;
 const MAX_PAGES = 300;
 
 // Paths that are low-value for a Q&A knowledge base: team bios (usually
-// just a name/title, ~1 chunk each), category archive pages, and tag
-// archive pages (WordPress taxonomy pages — both are excerpt duplicates of
-// posts that get scraped directly anyway, and tag pages multiply further
-// via their own pagination, e.g. /tag/wcag/?paged=2). Skipping these
+// just a name/title, ~1 chunk each), category/tag archive pages (excerpt
+// duplicates of posts that get scraped directly anyway, multiplying further
+// via their own pagination), and WordPress monthly date archives
+// (e.g. /2026/06/) which on this site come back as verbatim duplicates of
+// the homepage — no unique content, pure navigation. Skipping these
 // outright — rather than just deprioritizing — keeps the page budget
 // pointed at substantive content.
-const SKIP_PATH_PATTERNS = [/\/teams\//, /\/category\//, /\/tag\//];
+const SKIP_PATH_PATTERNS = [/\/teams\//, /\/category\//, /\/tag\//, /^\/\d{4}\/\d{2}\/?$/];
 
 // Non-HTML asset URLs (images, documents, etc.) that sometimes end up
 // wrapped in <a href> (e.g. lightbox links) and get picked up by
@@ -32,6 +33,25 @@ function shouldSkipUrl(url) {
   try {
     const path = new URL(url).pathname;
     return SKIP_PATH_PATTERNS.some((re) => re.test(path)) || ASSET_EXTENSION_RE.test(path);
+  } catch {
+    return false;
+  }
+}
+
+// Blog index/pagination pages (/blogs/, /blogs/page/N/, /blogs/?paged=N)
+// only ever contain generic teaser excerpts — and worse, this WordPress
+// site exposes the *same* paginated content under two different URL
+// schemes (query string AND path-based), so both were getting scraped and
+// stored as separate duplicate chunks. These pages are still useful for
+// link discovery (they're how deeper blog posts get found), so they stay
+// crawled — they just shouldn't be indexed into the knowledge base.
+function isBlogListingPage(url) {
+  try {
+    const u = new URL(url);
+    if (/^\/blogs\/?$/.test(u.pathname)) return true;
+    if (/^\/blogs\/page\/\d+\/?$/.test(u.pathname)) return true;
+    if (u.pathname.startsWith("/blogs/") && u.searchParams.has("paged")) return true;
+    return false;
   } catch {
     return false;
   }
@@ -145,7 +165,12 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
   const scrapedAt = new Date().toISOString();
   const startHostname = new URL(startUrl).hostname;
 
-  const pages = [];
+  // Keyed by URL rather than a plain array — when Crawlee retries a request
+  // (e.g. after a timeout) the handler can run again for a URL that already
+  // succeeded once, which was silently double-indexing pages (seen as
+  // "pages with content" exceeding the actual distinct request count).
+  // Last write simply overwrites, so duplicates never reach Chroma.
+  const pages = new Map();
 
   const crawler = new PlaywrightCrawler({
     maxRequestsPerCrawl: MAX_PAGES,
@@ -202,11 +227,19 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
         },
       });
 
+      // Blog index/pagination pages need to be crawled (for link discovery
+      // into deeper posts) but their content is generic teaser boilerplate
+      // duplicated across every page number — don't index it.
+      if (isBlogListingPage(request.url)) {
+        log.info(`Crawled for links only (listing page, not indexed): ${request.url}`);
+        return;
+      }
+
       const chunks = chunkText(blocks);
       log.info(`${chunks.length} chunks from "${title}"`);
 
       if (chunks.length > 0) {
-        pages.push({ url: request.url, title, chunks });
+        pages.set(request.url, { url: request.url, title, chunks });
       }
     },
 
@@ -218,12 +251,12 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
   await crawler.run([startUrl]);
   await crawler.teardown();
 
-  const pagesScraped = pages.length;
+  const pagesScraped = pages.size;
   console.log(`Crawl finished. Pages with content: ${pagesScraped}. Browser closed — starting embeddings.`);
 
   let chunksStored = 0;
 
-  for (const { url, title, chunks } of pages) {
+  for (const { url, title, chunks } of pages.values()) {
     const ids = [];
     const embeddings = [];
     const documents = [];
