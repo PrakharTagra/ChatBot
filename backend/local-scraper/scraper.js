@@ -106,6 +106,10 @@ function extractText($) {
   return { title, blocks };
 }
 
+function normalizeText(text) {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function chunkText(blocks, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
   const chunks = [];
   let current = [];
@@ -172,6 +176,22 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
   // Last write simply overwrites, so duplicates never reach Chroma.
   const pages = new Map();
 
+  // Sitewide BLOCK-level dedup — must happen before chunking, not after.
+  // chunkText() concatenates consecutive blocks up to 150 words regardless
+  // of component boundaries, so the same widget block (e.g. one testimonial
+  // paragraph) ends up glued to different neighboring content depending on
+  // what precedes/follows it on each particular page. That makes the
+  // resulting CHUNK text different across pages even though the repeated
+  // block itself is byte-identical — which let duplicate widget content
+  // slip past a chunk-level dedup. Filtering at the block level, before any
+  // bundling happens, means a repeated block can never be glued to
+  // different padding on different pages in the first place. Only applied
+  // to blocks long enough to be a real sentence/paragraph (short repeated
+  // labels like "Email:" aren't worth tracking and chunkText already drops
+  // sub-80-char chunks anyway).
+  const seenBlockText = new Set();
+  const BLOCK_DEDUP_MIN_LENGTH = 50;
+
   const crawler = new PlaywrightCrawler({
     maxRequestsPerCrawl: MAX_PAGES,
     maxConcurrency: 1,
@@ -203,13 +223,34 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
         .catch(() => {});
 
       const $ = await parseWithCheerio();
-      const { title, blocks } = extractText($);
-      const totalLength = blocks.reduce((sum, b) => sum + b.text.length, 0);
+      const { title, blocks: rawBlocks } = extractText($);
 
-      if (totalLength < 100) {
+      // This check must run on RAW content, before dedup — it decides
+      // whether the page is substantial enough to be worth crawling links
+      // from at all. Checking post-dedup length here would mean a page
+      // whose content happens to be mostly shared widgets already seen on
+      // earlier pages could wrongly get treated as "too short" and skip
+      // enqueueLinks entirely, silently breaking link discovery deeper into
+      // the site purely based on crawl order.
+      const rawTotalLength = rawBlocks.reduce((sum, b) => sum + b.text.length, 0);
+
+      if (rawTotalLength < 100) {
         log.info("Skipping — too short");
         return;
       }
+
+      // Drop any block whose normalized text has already been seen on an
+      // earlier page in this crawl — catches shared widgets (testimonial
+      // carousels, FAQ boilerplate, footer CTAs) before they ever get
+      // bundled into a chunk alongside page-specific neighbors. Only
+      // affects what gets indexed, never link discovery (see above).
+      const blocks = rawBlocks.filter((b) => {
+        if (b.text.length < BLOCK_DEDUP_MIN_LENGTH) return true;
+        const norm = normalizeText(b.text);
+        if (seenBlockText.has(norm)) return false;
+        seenBlockText.add(norm);
+        return true;
+      });
 
       await enqueueLinks({
         strategy: "same-domain",
@@ -256,14 +297,12 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
 
   let chunksStored = 0;
   let duplicatesSkipped = 0;
-  // Sitewide content dedup — keyed by normalized chunk text, NOT per-page.
-  // Shared widgets (testimonial carousels, footer CTAs, FAQ boilerplate,
-  // etc.) get re-scraped on every page they appear on, which was producing
-  // 10-20+ duplicate copies of the same 2-3 generic blurbs across the site.
-  // Those duplicates score well against almost any broad query and were
-  // crowding out specific, unique content (like a single FAQ answer) out of
-  // the small TOP_K window at query time. Keep only the first occurrence
-  // (whichever page is crawled first) of any given chunk text.
+  // Secondary safety net, layered on top of the block-level dedup above —
+  // catches any remaining exact-duplicate CHUNKS (e.g. two pages that are
+  // wholesale aliases of each other, where every chunk matches start to
+  // finish). The block-level dedup is what actually prevents shared widgets
+  // from polluting retrieval; this just mops up anything that still slipped
+  // through identical end-to-end.
   const seenChunkText = new Set();
 
   for (const { url, title, chunks } of pages.values()) {
@@ -273,7 +312,7 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
     const metadatas = [];
 
     for (let i = 0; i < chunks.length; i++) {
-      const normalized = chunks[i].text.toLowerCase().replace(/\s+/g, " ").trim();
+      const normalized = normalizeText(chunks[i].text);
       if (seenChunkText.has(normalized)) {
         duplicatesSkipped++;
         continue;

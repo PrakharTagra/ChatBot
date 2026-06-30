@@ -18,7 +18,7 @@ const SIMILARITY_THRESHOLD = 0.45;
 // question — don't feed them into the LLM's context, they just invite
 // vague/blended answers.
 const CONTEXT_INCLUSION_THRESHOLD = 0.35;
-const TOP_K = 3;
+const TOP_K = 6;
 const NOT_FOUND_TOKEN = "NOT_IN_CONTEXT";
 
 const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
@@ -106,8 +106,9 @@ STRICT RULES — follow these exactly:
 - Never use outside knowledge, training data, assumptions, or general industry/topic knowledge to fill gaps.
 - If the CONTEXT does not contain the specific information needed to answer the question, you MUST respond with exactly this and nothing else: ${NOT_FOUND_TOKEN}
 - Do not guess, infer, hedge, or generalize beyond what is explicitly written in the CONTEXT. A partial or related fact is not an answer — if it doesn't actually answer what was asked, output ${NOT_FOUND_TOKEN}.
-- Otherwise: be concise and friendly. Plain text only — no markdown, no asterisks, no [text](url) links, no bullet points.
-- Write in short paragraphs. Never say "the website" — always say "${siteName}" by name.
+- Otherwise: be thorough and well-organized, not just brief. Use the CONTEXT fully — if it describes several distinct things (e.g. multiple services, features, or steps), cover each one rather than picking just one or vaguely summarizing.
+- Structure the answer for readability: start with a one-sentence direct answer, then use a plain-text bullet list (each line starting with "- ") when covering multiple items, with a blank line between the intro and the list. Use a blank line between separate paragraphs/sections too. Plain text only — no markdown headers, no asterisks/bold, no [text](url) links.
+- Never say "the website" — always say "${siteName}" by name.
 - On the very last line, output exactly: CITED_SOURCE: <n> — where <n> is the number of the single Source you drew the answer from. If you used more than one, give the one that contains the most specific/direct answer.
 
 CONTEXT:
@@ -119,7 +120,7 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
 
     const completion = await getGroq().chat.completions.create({
       model: "llama-3.1-8b-instant",
-      max_tokens: 400,
+      max_tokens: 800,
       messages: [
         { role: "system", content: systemPrompt },
         ...recentHistory,
