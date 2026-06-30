@@ -4,10 +4,40 @@ import { getOrCreateCollection, deleteCollection, setSiteMongoUri } from "./util
 
 const CHUNK_SIZE = 150;
 const CHUNK_OVERLAP = 30;
-const MAX_PAGES = 100;
+// Was 100 — the crawl was hitting this limit before reaching most of the
+// blog (paginated 23+ deep), while ~20 single-chunk team-bio pages and ~40
+// thin category-archive pages (duplicates of content already indexed from
+// the actual posts) were eating the budget first. Raised so real content
+// pages get scraped; combined with the skip patterns below so budget isn't
+// wasted on low-value pages either.
+const MAX_PAGES = 300;
+
+// Paths that are low-value for a Q&A knowledge base: team bios (usually
+// just a name/title, ~1 chunk each) and category archive pages (excerpt
+// duplicates of posts that get scraped directly anyway). Skipping these
+// outright — rather than just deprioritizing — keeps the page budget
+// pointed at substantive content.
+const SKIP_PATH_PATTERNS = [/\/teams\//, /\/category\//];
+
+function shouldSkipUrl(url) {
+  try {
+    const path = new URL(url).pathname;
+    return SKIP_PATH_PATTERNS.some((re) => re.test(path));
+  } catch {
+    return false;
+  }
+}
 
 function extractText($) {
   $("script, style, nav, footer, header, noscript, iframe, img").remove();
+  // Icon labels and visually-hidden utility text (common pattern: a span
+  // with "Search Icon"/"Back Button" etc. for screen readers) were leaking
+  // into titles and chunk text — e.g. "Speak to an Expert - D2i
+  // TechnologyBack ButtonSearch IconFilter Iconman". These elements are
+  // either hidden from sighted users (aria-hidden) or visually hidden but
+  // present in the DOM (.sr-only / .visually-hidden / .visuallyhidden), so
+  // they're noise for a text-based knowledge base either way.
+  $('[aria-hidden="true"], .sr-only, .visually-hidden, .visuallyhidden').remove();
   const title = $("title").text().trim() || $("h1").first().text().trim();
   const contentSelectors = ["main", "article", ".content", ".post", "#content", "body"];
   let root = null;
@@ -127,6 +157,11 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
     ],
 
     async requestHandler({ request, page, enqueueLinks, parseWithCheerio, log }) {
+      if (shouldSkipUrl(request.url)) {
+        log.info(`Skipping low-value page: ${request.url}`);
+        return;
+      }
+
       log.info(`Scraping: ${request.url}`);
 
       await page
@@ -148,6 +183,7 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
           try {
             const u = new URL(req.url);
             if (u.hostname !== startHostname) return false;
+            if (shouldSkipUrl(u.toString())) return false;
             u.hash = "";
             req.url = u.toString();
             return req;
