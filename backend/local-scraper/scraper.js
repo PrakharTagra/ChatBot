@@ -255,6 +255,16 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
   console.log(`Crawl finished. Pages with content: ${pagesScraped}. Browser closed — starting embeddings.`);
 
   let chunksStored = 0;
+  let duplicatesSkipped = 0;
+  // Sitewide content dedup — keyed by normalized chunk text, NOT per-page.
+  // Shared widgets (testimonial carousels, footer CTAs, FAQ boilerplate,
+  // etc.) get re-scraped on every page they appear on, which was producing
+  // 10-20+ duplicate copies of the same 2-3 generic blurbs across the site.
+  // Those duplicates score well against almost any broad query and were
+  // crowding out specific, unique content (like a single FAQ answer) out of
+  // the small TOP_K window at query time. Keep only the first occurrence
+  // (whichever page is crawled first) of any given chunk text.
+  const seenChunkText = new Set();
 
   for (const { url, title, chunks } of pages.values()) {
     const ids = [];
@@ -263,8 +273,15 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
     const metadatas = [];
 
     for (let i = 0; i < chunks.length; i++) {
+      const normalized = chunks[i].text.toLowerCase().replace(/\s+/g, " ").trim();
+      if (seenChunkText.has(normalized)) {
+        duplicatesSkipped++;
+        continue;
+      }
+      seenChunkText.add(normalized);
+
       const embedding = await getEmbedding(chunks[i].text);
-      ids.push(`${websiteId}-${chunksStored + i}`);
+      ids.push(`${websiteId}-${chunksStored + ids.length}`);
       embeddings.push(embedding);
       documents.push(chunks[i].text);
       metadatas.push({
@@ -282,10 +299,10 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
 
     if (ids.length > 0) {
       await collection.upsert({ ids, embeddings, documents, metadatas });
-      chunksStored += chunks.length;
+      chunksStored += ids.length;
     }
   }
 
-  console.log(`Done! Pages: ${pagesScraped} | Chunks: ${chunksStored}`);
+  console.log(`Done! Pages: ${pagesScraped} | Chunks: ${chunksStored} | Duplicates skipped: ${duplicatesSkipped}`);
   return { pagesScraped, chunksStored };
 }
