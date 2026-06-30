@@ -356,7 +356,7 @@
           const data = await res.json();
           typingEl.remove();
 
-          if (!data.confident && data.action === "collect_lead") {
+          if (data.action === "collect_lead") {
             appendBotMessage(data.answer);
             setTimeout(() => startLeadCapture(), 400);
           } else {

@@ -24,6 +24,15 @@ const NOT_FOUND_TOKEN = "NOT_IN_CONTEXT";
 const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
 const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you|ok|okay|sure|great|cool|awesome|bye|goodbye|see you|cheers)\b/i;
 
+// Matches the user explicitly asking to get in touch / be contacted — this
+// kicks off lead capture directly, regardless of whether retrieval would
+// have found a confident answer.
+const CONTACT_INTENT_RE = /\b(contact( (you|us|someone|me))?|get in touch|reach (you|out)|talk to (someone|a human|a person|a representative|your team)|speak (to|with) (someone|a human|a person)|call (me|back)|phone number|email address|customer support|sales team|book a call|schedule a call)\b/i;
+
+// Matches the user explicitly asking for a link/URL/source page — only then
+// do we attach the source chip to the answer.
+const LINK_REQUEST_RE = /\b(link|url|web ?page|source|page (link|url)|where can i (read|see|find)|send (me )?the link|share the link|give me the link)\b/i;
+
 router.post("/", async (req, res) => {
   const { message, websiteId, history = [], websiteName } = req.body;
 
@@ -39,6 +48,17 @@ router.post("/", async (req, res) => {
       answer: `Hello! I'm ${siteName}'s assistant. How can I help you today?`,
       source: null,
       confident: true,
+    });
+  }
+
+  // User wants to get in touch / be contacted — skip retrieval entirely and
+  // go straight to lead capture.
+  if (CONTACT_INTENT_RE.test(trimmed)) {
+    return res.json({
+      answer: `I'd be happy to connect you with someone from the ${siteName} team. Let me grab a few quick details.`,
+      source: null,
+      confident: true,
+      action: "collect_lead",
     });
   }
 
@@ -131,11 +151,15 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
     // captured during scraping) that the answer's content actually came from,
     // instead of always pointing at the highest-scoring retrieval result.
     const citedChunk = (citedIndex >= 0 && relevantChunks[citedIndex]) ? relevantChunks[citedIndex] : ranked[0];
-    const source = confident
+
+    // Only surface the source link when the user actually asked for one —
+    // otherwise keep the answer link-free.
+    const linkRequested = LINK_REQUEST_RE.test(trimmed);
+    const source = confident && linkRequested
       ? (citedChunk.anchor ? `${citedChunk.url}#${citedChunk.anchor}` : citedChunk.url)
       : null;
 
-    console.log("CONFIDENCE:", { topScore: topScore.toFixed(3), retrievalConfident, modelSaysNotFound, confident, citedIndex, source });
+    console.log("CONFIDENCE:", { topScore: topScore.toFixed(3), retrievalConfident, modelSaysNotFound, confident, citedIndex, linkRequested, source });
 
     return res.json({
       answer,
