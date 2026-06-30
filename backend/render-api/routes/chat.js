@@ -27,7 +27,7 @@ const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you
 // Matches the user explicitly asking to get in touch / be contacted — this
 // kicks off lead capture directly, regardless of whether retrieval would
 // have found a confident answer.
-const CONTACT_INTENT_RE = /\b(contact( (you|us|someone|me))?|get in touch|reach (you|out)|talk to (someone|a human|a person|a representative|your team)|speak (to|with) (someone|a human|a person)|call (me|back)|phone number|email address|customer support|sales team|book a call|schedule a call)\b/i;
+const CONTACT_INTENT_RE = /\b(contact( (you|us|someone|me))?|get in touch|reach (you|out)|talk to (someone|a human|a person|a representative|your team)|speak (to|with) (someone|a human|a person)|connect (me |us )?(with |to )?(you|your team|someone|the team)|call (me|back)|phone number|email address|customer support|sales team|book a call|schedule a call)\b/i;
 
 // Matches the user explicitly asking for a link/URL/source page — only then
 // do we attach the source chip to the answer.
