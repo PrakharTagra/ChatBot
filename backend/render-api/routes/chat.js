@@ -63,8 +63,22 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const recentContext = history.slice(-2).map(m => m.content).join(" ");
-    const contextualQuery = recentContext ? `${recentContext} ${trimmed}` : trimmed;
+    // Build contextual query from the USER's own recent turns only — not
+    // the bot's previous answers. The system prompt below tells the model
+    // to write long, structured, multi-bullet answers, and MiniLM mean-pools
+    // every word into one vector: a 150+ word previous bot answer folded in
+    // here doesn't just risk truncation, it actively pulls the embedding
+    // toward the *previous* topic and away from the current question,
+    // which is what was producing vague/blended answers on follow-ups.
+    // Capping to a short recent-user-turn snippet keeps just enough for
+    // pronoun/topic continuity ("what about pricing?") without drowning
+    // out the current question.
+    const recentUserContext = history
+      .filter((m) => m.role === "user")
+      .slice(-1)
+      .map((m) => m.content.split(" ").slice(-40).join(" "))
+      .join(" ");
+    const contextualQuery = recentUserContext ? `${recentUserContext} ${trimmed}` : trimmed;
     const queryEmbedding = await getEmbedding(contextualQuery);
     const ranked = await queryChroma(websiteId, queryEmbedding, TOP_K);
     console.log("TOP RESULTS:", ranked.map(r => ({

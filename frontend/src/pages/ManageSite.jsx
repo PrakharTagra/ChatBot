@@ -14,6 +14,7 @@ export default function ManageSite() {
 
   // Re-scrape state
   const [newUrl, setNewUrl] = useState('')
+  const [mongoUri, setMongoUri] = useState('')
   const [scraping, setScraping] = useState(false)
   const [scrapeResult, setScrapeResult] = useState(null)
   const [scrapeError, setScrapeError] = useState('')
@@ -51,7 +52,11 @@ export default function ManageSite() {
     setScrapeResult(null)
     setScrapeError('')
     try {
-      const res = await axios.post(`${SCRAPER_API}/api/scrape`, { url: newUrl, websiteId })
+      const res = await axios.post(`${SCRAPER_API}/api/scrape`, {
+        url: newUrl,
+        websiteId,
+        ...(mongoUri.trim() ? { mongoUri: mongoUri.trim() } : {}),
+      })
       setScrapeResult(res.data)
     } catch (e) {
       setScrapeError(e.response?.data?.error || e.message)
@@ -274,6 +279,19 @@ export default function ManageSite() {
                 onChange={e => setNewUrl(e.target.value)}
                 disabled={scraping}
               />
+            </div>
+
+            <div className="field" style={{ maxWidth: 480 }}>
+              <label>MongoDB Connection URI <span style={{ fontWeight: 400, color: 'var(--text2)' }}>(optional)</span></label>
+              <input
+                className="input mono"
+                type="password"
+                placeholder="Leave blank to keep the existing lead-capture URI"
+                value={mongoUri}
+                onChange={e => setMongoUri(e.target.value)}
+                disabled={scraping}
+              />
+              <p className="field-hint">Re-scraping keeps whatever URI is already saved for this site. Only fill this in if you want to change it.</p>
             </div>
 
             {scrapeError && <div className="error-box" style={{ maxWidth: 480, marginBottom: 12 }}>⚠️ {scrapeError}</div>}

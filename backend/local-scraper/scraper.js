@@ -1,6 +1,6 @@
 import { PlaywrightCrawler } from "crawlee";
 import { getEmbedding } from "./utils/embeddings.js";
-import { getOrCreateCollection, deleteCollection, setSiteMongoUri } from "./utils/chroma.js";
+import { getOrCreateCollection, deleteCollection, setSiteMongoUri, getSiteMongoUri } from "./utils/chroma.js";
 
 const CHUNK_SIZE = 150;
 const CHUNK_OVERLAP = 30;
@@ -157,13 +157,23 @@ function chunkText(blocks, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
 }
 
 export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
+  // mongoUri lives on the Chroma collection's own metadata (see chroma.js),
+  // and deleteCollection() below wipes that metadata entirely. On a
+  // re-scrape (content refresh) the caller usually doesn't resend the URI
+  // — it was only meant to be set once at registration — so without this,
+  // every re-scrape silently disabled lead capture for the site. Grab
+  // whatever's already saved BEFORE deleting, and restore it afterward
+  // unless an explicit new value was passed in.
+  const existingMongoUri = await getSiteMongoUri(websiteId);
+
   await deleteCollection(websiteId);
   const collection = await getOrCreateCollection(websiteId);
   console.log(`Cleared and recreated collection for: ${websiteId}`);
 
-  if (mongoUri && mongoUri.trim()) {
-    await setSiteMongoUri(websiteId, mongoUri.trim());
-    console.log(`Lead-capture MongoDB URI saved on Chroma collection metadata for: ${websiteId}`);
+  const mongoUriToSave = (mongoUri && mongoUri.trim()) ? mongoUri.trim() : existingMongoUri;
+  if (mongoUriToSave) {
+    await setSiteMongoUri(websiteId, mongoUriToSave);
+    console.log(`Lead-capture MongoDB URI ${mongoUriToSave === existingMongoUri ? "restored" : "saved"} on Chroma collection metadata for: ${websiteId}`);
   }
 
   const scrapedAt = new Date().toISOString();
