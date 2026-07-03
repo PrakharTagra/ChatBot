@@ -9,7 +9,7 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
-const SIMILARITY_THRESHOLD = 0.45;
+const SIMILARITY_THRESHOLD = 0.32;
 const CONTEXT_INCLUSION_THRESHOLD = 0.35;
 const TOP_K = 6;
 const NOT_FOUND_TOKEN = "NOT_IN_CONTEXT";
