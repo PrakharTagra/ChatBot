@@ -31,7 +31,6 @@ export async function deleteCollection(websiteId) {
   try {
     await getClient().deleteCollection({ name: collectionName(websiteId) });
   } catch {
-    // collection didn't exist yet — fine
   }
 }
 
@@ -85,13 +84,6 @@ export async function queryChroma(websiteId, queryEmbedding, topK = 3) {
   }));
 }
 
-/**
- * mongoUri needs to survive across two different processes/machines
- * (scraping runs locally, leads/chat run on Render), so it can't live
- * in an in-memory Map anymore. We piggyback it onto the Chroma
- * collection's own metadata, since Chroma Cloud is the one piece of
- * shared state both sides already talk to.
- */
 export async function setSiteMongoUri(websiteId, mongoUri) {
   const collection = await getOrCreateCollection(websiteId);
   const existing = collection.metadata || {};

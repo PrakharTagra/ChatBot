@@ -24,7 +24,7 @@ export default function RegisterSite() {
   const [mongoUri, setMongoUri] = useState('')
   const [idTouched, setIdTouched] = useState(false)
 
-  const [step, setStep] = useState('form') // form | scraping | done
+  const [step, setStep] = useState('form') 
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [logs, setLogs] = useState([])
@@ -84,7 +84,7 @@ export default function RegisterSite() {
     <div className="register-page fade-in">
       {step !== 'done' && (
         <div className="register-grid">
-          {/* Left: Form */}
+          {}
           <div className="register-form-col">
             <div className="card">
               <h2 className="form-section-title">Website Details</h2>
@@ -197,7 +197,7 @@ export default function RegisterSite() {
             </div>
           </div>
 
-          {/* Right: Logs + Preview */}
+          {}
           <div className="register-side-col">
             {logs.length > 0 && (
               <div className="card log-card">

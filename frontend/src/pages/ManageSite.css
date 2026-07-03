@@ -4,7 +4,7 @@
 .manage-title { font-size: 17px; font-weight: 700; }
 .manage-title .accent { color: var(--accent); }
 
-/* Tabs */
+
 .tabs {
   display: flex;
   gap: 4px;
@@ -34,7 +34,7 @@
 
 .tab-content { flex: 1; }
 
-/* Tab card */
+
 .tab-header {
   display: flex;
   justify-content: space-between;
@@ -46,7 +46,7 @@
 .tab-header h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
 .tab-header p { font-size: 13px; color: var(--text2); }
 
-/* Code block */
+
 .code-block {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -61,7 +61,7 @@
   overflow-x: auto;
 }
 
-/* Chat Test */
+
 .chat-test-card {}
 
 .chat-window {
@@ -118,7 +118,7 @@
   font-style: italic;
 }
 
-/* Typing indicator */
+
 .typing {
   display: flex;
   align-items: center;
@@ -137,7 +137,7 @@
 
 .chat-input-row { display: flex; gap: 10px; }
 
-/* Re-scrape */
+
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 
 .error-box {

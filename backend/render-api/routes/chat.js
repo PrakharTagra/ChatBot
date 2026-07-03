@@ -9,14 +9,7 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
-// all-MiniLM-L6-v2 cosine similarity: ~0.0-0.3 = unrelated, ~0.3-0.45 = loosely
-// related/same-topic noise, 0.45+ = actually relevant. 0.30 was letting noise
-// through as "confident", which is why generic answers were happening instead
-// of escalation. Tune this against your own scraped content if needed.
 const SIMILARITY_THRESHOLD = 0.45;
-// Chunks below this (but still returned in top-K) are noise relative to the
-// question — don't feed them into the LLM's context, they just invite
-// vague/blended answers.
 const CONTEXT_INCLUSION_THRESHOLD = 0.35;
 const TOP_K = 6;
 const NOT_FOUND_TOKEN = "NOT_IN_CONTEXT";
@@ -24,13 +17,8 @@ const NOT_FOUND_TOKEN = "NOT_IN_CONTEXT";
 const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
 const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you|ok|okay|sure|great|cool|awesome|bye|goodbye|see you|cheers)\b/i;
 
-// Matches the user explicitly asking to get in touch / be contacted — this
-// kicks off lead capture directly, regardless of whether retrieval would
-// have found a confident answer.
 const CONTACT_INTENT_RE = /\b(contact( (you|us|someone|me))?|get in touch|reach (you|out)|talk to (someone|a human|a person|a representative|your team)|speak (to|with) (someone|a human|a person)|connect (me |us )?(with |to )?(you|your team|someone|the team)|call (me|back)|phone number|email address|customer support|sales team|book a call|schedule a call)\b/i;
 
-// Matches the user explicitly asking for a link/URL/source page — only then
-// do we attach the source chip to the answer.
 const LINK_REQUEST_RE = /\b(link|url|web ?page|source|page (link|url)|where can i (read|see|find)|send (me )?the link|share the link|give me the link)\b/i;
 
 router.post("/", async (req, res) => {
@@ -51,8 +39,6 @@ router.post("/", async (req, res) => {
     });
   }
 
-  // User wants to get in touch / be contacted — skip retrieval entirely and
-  // go straight to lead capture.
   if (CONTACT_INTENT_RE.test(trimmed)) {
     return res.json({
       answer: `I'd be happy to connect you with someone from the ${siteName} team. Let me grab a few quick details.`,
@@ -63,16 +49,6 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    // Build contextual query from the USER's own recent turns only — not
-    // the bot's previous answers. The system prompt below tells the model
-    // to write long, structured, multi-bullet answers, and MiniLM mean-pools
-    // every word into one vector: a 150+ word previous bot answer folded in
-    // here doesn't just risk truncation, it actively pulls the embedding
-    // toward the *previous* topic and away from the current question,
-    // which is what was producing vague/blended answers on follow-ups.
-    // Capping to a short recent-user-turn snippet keeps just enough for
-    // pronoun/topic continuity ("what about pricing?") without drowning
-    // out the current question.
     const recentUserContext = history
       .filter((m) => m.role === "user")
       .slice(-1)
@@ -97,9 +73,6 @@ router.post("/", async (req, res) => {
     const topScore = ranked[0].score;
     const retrievalConfident = topScore >= SIMILARITY_THRESHOLD;
 
-    // Only feed chunks that clear the inclusion bar into the LLM's context.
-    // Including weak/unrelated top-K filler chunks is what was causing the
-    // model to blend in tangential info and produce vague-but-plausible answers.
     const relevantChunks = ranked.filter((c) => c.score >= CONTEXT_INCLUSION_THRESHOLD);
 
     const context = relevantChunks
@@ -144,31 +117,20 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
 
     const rawCompletion = completion.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
 
-    // Pull the model's self-reported source number off the last line, then
-    // strip that line out before showing the answer to the user.
     const citedMatch = rawCompletion.match(/CITED_SOURCE:\s*(\d+)\s*$/i);
     const citedIndex = citedMatch ? parseInt(citedMatch[1], 10) - 1 : -1;
     const rawAnswer = rawCompletion.replace(/CITED_SOURCE:\s*\d+\s*$/i, "").trim();
 
     const modelSaysNotFound = retrievalConfident && rawAnswer.includes(NOT_FOUND_TOKEN);
 
-    // Final confidence requires BOTH a strong retrieval match AND the model
-    // actually finding the answer in that context.
     const confident = retrievalConfident && !modelSaysNotFound;
 
     const answer = confident
       ? stripMarkdown(rawAnswer)
       : `I couldn't find specific information about that for ${siteName}, but I can connect you with someone from the team if you leave your details.`;
 
-    // Use whichever chunk the model actually says it answered from — falling
-    // back to the top-ranked chunk only if it didn't cite cleanly. This
-    // keeps the link tied to the page (and section, if a heading id was
-    // captured during scraping) that the answer's content actually came from,
-    // instead of always pointing at the highest-scoring retrieval result.
     const citedChunk = (citedIndex >= 0 && relevantChunks[citedIndex]) ? relevantChunks[citedIndex] : ranked[0];
 
-    // Only surface the source link when the user actually asked for one —
-    // otherwise keep the answer link-free.
     const linkRequested = LINK_REQUEST_RE.test(trimmed);
     const source = confident && linkRequested
       ? (citedChunk.anchor ? `${citedChunk.url}#${citedChunk.anchor}` : citedChunk.url)

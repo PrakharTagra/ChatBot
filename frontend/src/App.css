@@ -3,7 +3,7 @@
   min-height: 100vh;
 }
 
-/* Sidebar */
+
 .sidebar {
   width: 240px;
   min-height: 100vh;
@@ -105,7 +105,7 @@
   font-family: 'DM Mono', monospace;
 }
 
-/* Main area */
+
 .main-wrapper {
   flex: 1;
   margin-left: 240px;

@@ -25,7 +25,6 @@ export default function Dashboard() {
       setSites(sitesRes.data.sites || [])
       setStats(statsRes.data || {})
     } catch (e) {
-      // If backend doesn't have /api/sites yet, show empty state gracefully
       setError('')
       setSites([])
     } finally {
@@ -52,14 +51,14 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard fade-in">
-      {/* Stat Cards */}
+      {}
       <div className="stat-grid">
         <StatCard icon="🌐" label="Websites Indexed" value={stats.totalSites ?? sites.length} color="accent" />
         <StatCard icon="📄" label="Content Chunks" value={stats.totalChunks ?? '—'} color="teal" />
         <StatCard icon="⚡" label="AI Engine" value="Groq Llama" color="yellow" small />
       </div>
 
-      {/* Sites Section */}
+      {}
       <div className="section-header">
         <h2 className="section-title">Registered Websites</h2>
         <button className="btn btn-primary btn-sm" onClick={() => navigate('/register')}>

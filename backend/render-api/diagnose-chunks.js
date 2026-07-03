@@ -1,13 +1,3 @@
-// Diagnostic: inspect what's actually stored in ChromaDB for a given site.
-//
-// Usage:
-//   node diagnose-chunks.js <websiteId> "search term"
-//
-// Example:
-//   node diagnose-chunks.js d2i-technology "services"
-//
-// Requires CHROMA_API_KEY, CHROMA_TENANT, CHROMA_DATABASE in your environment
-// (same values used by render-api / local-scraper).
 
 import "dotenv/config";
 import { CloudClient } from "chromadb";
@@ -46,15 +36,10 @@ async function main() {
     return;
   }
 
-  // Pull everything (fine for typical site sizes; for very large sites you'd
-  // want to paginate with limit/offset instead).
   const all = await collection.get({
     include: ["documents", "metadatas"],
   });
 
-  // 1. Plain substring search across every stored chunk — tells us
-  //    definitively whether the content exists in Chroma at all,
-  //    independent of embedding similarity.
   const matches = [];
   for (let i = 0; i < all.ids.length; i++) {
     const text = (all.documents[i] || "").toLowerCase();
@@ -83,8 +68,6 @@ async function main() {
     );
   }
 
-  // 2. List every distinct page (url + title) that WAS scraped, so you can
-  //    eyeball whether the services page shows up under any URL at all.
   const pages = new Map();
   for (let i = 0; i < all.ids.length; i++) {
     const url = all.metadatas[i]?.url;

@@ -8,25 +8,22 @@ export default function ManageSite() {
   const { websiteId } = useParams()
   const navigate = useNavigate()
 
-  const [tab, setTab] = useState('embed') // embed | test | rescrape
+  const [tab, setTab] = useState('embed') 
   const [copied, setCopied] = useState(false)
-  const [backendOk, setBackendOk] = useState(null) // null=checking, true=ok, false=down
+  const [backendOk, setBackendOk] = useState(null) 
 
-  // Re-scrape state
   const [newUrl, setNewUrl] = useState('')
   const [mongoUri, setMongoUri] = useState('')
   const [scraping, setScraping] = useState(false)
   const [scrapeResult, setScrapeResult] = useState(null)
   const [scrapeError, setScrapeError] = useState('')
 
-  // Live test chat
   const [chatMessages, setChatMessages] = useState([
     { role: 'bot', text: `👋 Hi! Ask me anything — I'll search the indexed content for "${websiteId}".` }
   ])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const chatEndRef = useRef(null)
-  // Keep a ref of messages for history so sendChatMessage always has the latest
   const chatHistoryRef = useRef([])
 
   useEffect(() => {
@@ -73,7 +70,6 @@ export default function ManageSite() {
     const userMsg = { role: 'user', text: msg }
     setChatMessages(prev => [...prev, userMsg])
 
-    // Build history from ref (excludes the welcome message)
     const history = chatHistoryRef.current.map(m => ({
       role: m.role === 'bot' ? 'assistant' : 'user',
       content: m.text
@@ -89,7 +85,6 @@ export default function ManageSite() {
       })
       const { answer, source, confident, contactUrl } = res.data
 
-      // Show clean source path, not full URL
       let sourceLabel = null
       if (source) {
         try { sourceLabel = new URL(source).pathname || source } catch { sourceLabel = source }
@@ -142,7 +137,7 @@ export default function ManageSite() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {}
       <div className="tabs">
         {[
           { id: 'embed', label: '📋 Embed Code' },
@@ -161,7 +156,7 @@ export default function ManageSite() {
 
       <div className="tab-content">
 
-        {/* ── Embed Tab ── */}
+        {}
         {tab === 'embed' && (
           <div className="card fade-in">
             <div className="tab-header">
@@ -194,7 +189,7 @@ export default function ManageSite() {
           </div>
         )}
 
-        {/* ── Live Test Tab ── */}
+        {}
         {tab === 'test' && (
           <div className="card fade-in chat-test-card">
             <div className="tab-header">
@@ -259,7 +254,7 @@ export default function ManageSite() {
           </div>
         )}
 
-        {/* ── Re-scrape Tab ── */}
+        {}
         {tab === 'rescrape' && (
           <div className="card fade-in">
             <div className="tab-header">
