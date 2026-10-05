@@ -2,13 +2,17 @@ services:
   - type: web
     name: chatbot-backend
     runtime: node
-    rootDir: backend
+    rootDir: backend/render-api
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - key: MONGO_URI
-        sync: false
       - key: GROQ_API_KEY
+        sync: false
+      - key: CHROMA_API_KEY
+        sync: false
+      - key: CHROMA_TENANT
+        sync: false
+      - key: CHROMA_DATABASE
         sync: false
       - key: PORT
         value: 10000

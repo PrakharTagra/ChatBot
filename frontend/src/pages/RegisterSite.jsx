@@ -59,7 +59,10 @@ export default function RegisterSite() {
       setResult(res.data)
       setStep('done')
     } catch (e) {
-      const msg = e.response?.data?.error || e.message
+      let msg = e.response?.data?.error || e.message
+      if (msg.includes('Network Error') || e.code === 'ERR_NETWORK') {
+        msg = 'Local scraper worker not detected on http://localhost:5000. Start it via: "cd backend/local-scraper && npm run dev", or test pre-indexed sites in the Playground.'
+      }
       setError(`Scrape failed: ${msg}`)
       addLog(`❌ Error: ${msg}`)
       setStep('form')
@@ -84,9 +87,33 @@ export default function RegisterSite() {
     <div className="register-page fade-in">
       {step !== 'done' && (
         <div className="register-grid">
-          {}
+          {/* Form */}
           <div className="register-form-col">
             <div className="card">
+              <div style={{
+                background: 'rgba(108, 99, 255, 0.08)',
+                border: '1px solid rgba(108, 99, 255, 0.25)',
+                borderRadius: 8,
+                padding: '14px 16px',
+                marginBottom: 20,
+                fontSize: 13,
+                lineHeight: 1.5
+              }}>
+                <strong style={{ color: 'var(--accent3)', display: 'block', marginBottom: 4 }}>
+                  ⚙️ Ingestion Worker Architecture Note:
+                </strong>
+                Crawling heavy JS pages uses <strong>Playwright & Crawlee</strong>. To protect cloud web services from memory limits (512MB), scraping is executed on the dedicated crawler worker:
+                <pre style={{
+                  background: 'var(--bg)',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  marginTop: 8,
+                  fontSize: 12,
+                  fontFamily: 'DM Mono, monospace',
+                  color: 'var(--text)'
+                }}>cd backend/local-scraper && npm run dev</pre>
+              </div>
+
               <h2 className="form-section-title">Website Details</h2>
               <p className="form-section-desc">Enter the website URL to scrape and index its content.</p>
               <div className="divider" />

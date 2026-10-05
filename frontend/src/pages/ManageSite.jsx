@@ -190,16 +190,47 @@ export default function ManageSite() {
         )}
 
         {}
+        {/* Live Test Tab */}
         {tab === 'test' && (
           <div className="card fade-in chat-test-card">
             <div className="tab-header">
               <div>
-                <h3>Live Chat Test</h3>
+                <h3>Live Chat Playground: {websiteId}</h3>
                 <p>Test AI responses against the indexed content for <strong>{websiteId}</strong>.</p>
               </div>
-              {backendOk === null && <span className="badge" style={{ background: 'var(--bg3)', color: 'var(--text2)' }}>⏳ Checking…</span>}
-              {backendOk === true && <span className="badge badge-green">● Connected</span>}
-              {backendOk === false && <span className="badge" style={{ background: '#3d1a1a', color: '#f87171' }}>● Backend down</span>}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => navigate(`/test?site=${websiteId}`)}
+                  style={{ color: 'var(--accent3)' }}
+                >
+                  ⚡ Open Full Studio
+                </button>
+                {backendOk === null && <span className="badge" style={{ background: 'var(--bg3)', color: 'var(--text2)' }}>⏳ Checking…</span>}
+                {backendOk === true && <span className="badge badge-green">● Connected</span>}
+                {backendOk === false && <span className="badge" style={{ background: '#3d1a1a', color: '#f87171' }}>● Backend down</span>}
+              </div>
+            </div>
+
+            {/* Quick Suggestion Chips */}
+            <div style={{ display: 'flex', gap: 8, padding: '8px 12px', background: 'var(--bg3)', borderRadius: 8, overflowX: 'auto', marginBottom: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', alignSelf: 'center', whiteSpace: 'nowrap' }}>✨ Quick Prompts:</span>
+              {['What services do you provide?', 'How can I get in touch?', 'Where are you based?'].map((chip, idx) => (
+                <button
+                  key={idx}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 11, padding: '4px 10px', height: 'auto', whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    setChatInput(chip)
+                    setTimeout(() => {
+                      const inputElem = document.querySelector('.chat-input-row input')
+                      if (inputElem) inputElem.focus()
+                    }, 50)
+                  }}
+                >
+                  {chip}
+                </button>
+              ))}
             </div>
 
             <div className="chat-window">
@@ -254,7 +285,7 @@ export default function ManageSite() {
           </div>
         )}
 
-        {}
+        {/* Re-scrape Tab */}
         {tab === 'rescrape' && (
           <div className="card fade-in">
             <div className="tab-header">
@@ -262,6 +293,32 @@ export default function ManageSite() {
                 <h3>Re-scrape Website</h3>
                 <p>Run a fresh crawl to update the indexed content. Old chunks will be replaced.</p>
               </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(108, 99, 255, 0.08)',
+              border: '1px solid rgba(108, 99, 255, 0.25)',
+              borderRadius: 8,
+              padding: 14,
+              fontSize: 13,
+              marginBottom: 18,
+              lineHeight: 1.5,
+              maxWidth: 560
+            }}>
+              <strong style={{ color: 'var(--accent3)', display: 'block', marginBottom: 4 }}>
+                ℹ️ Production Ingestion Architecture Note:
+              </strong>
+              Web crawling runs via the offline headless worker (<code>local-scraper</code>) using Playwright to bypass free-tier memory caps.
+              Ensure your local scraper is running before triggering:
+              <pre style={{
+                background: 'var(--bg)',
+                padding: '8px 12px',
+                borderRadius: 6,
+                marginTop: 8,
+                fontSize: 12,
+                fontFamily: 'DM Mono, monospace',
+                color: 'var(--text)'
+              }}>cd backend/local-scraper && npm run dev</pre>
             </div>
 
             <div className="field" style={{ maxWidth: 480 }}>
@@ -289,7 +346,11 @@ export default function ManageSite() {
               <p className="field-hint">Re-scraping keeps whatever URI is already saved for this site. Only fill this in if you want to change it.</p>
             </div>
 
-            {scrapeError && <div className="error-box" style={{ maxWidth: 480, marginBottom: 12 }}>⚠️ {scrapeError}</div>}
+            {scrapeError && (
+              <div className="error-box" style={{ maxWidth: 480, marginBottom: 12 }}>
+                ⚠️ {scrapeError.includes('Network Error') ? 'Local scraper worker not detected on http://localhost:5000. Run the command above first.' : scrapeError}
+              </div>
+            )}
 
             {scrapeResult && (
               <div className="success-box" style={{ maxWidth: 480, marginBottom: 12 }}>

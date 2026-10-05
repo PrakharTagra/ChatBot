@@ -1,45 +1,74 @@
+import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import axios from 'axios'
+import {
+  LayoutDashboard,
+  Sparkles,
+  Video,
+  PlusCircle,
+  Layers,
+  Bot,
+  ExternalLink,
+  ShieldCheck,
+  Zap
+} from 'lucide-react'
 import Dashboard from './pages/Dashboard.jsx'
+import Playground from './pages/Playground.jsx'
+import VideoTutorial from './pages/VideoTutorial.jsx'
 import RegisterSite from './pages/RegisterSite.jsx'
 import ManageSite from './pages/ManageSite.jsx'
+import ArchitectureModal from './components/ArchitectureModal.jsx'
+import { RENDER_API } from './config'
 import './App.css'
 
-function Sidebar() {
+function Sidebar({ onOpenArchitecture }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div className="logo-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="currentColor" opacity="0.3"/>
-            <path d="M8 10.5C8 9.12 9.12 8 10.5 8h3C14.88 8 16 9.12 16 10.5v.5H8v-.5z" fill="currentColor"/>
-            <rect x="7" y="12" width="10" height="6" rx="2" fill="currentColor"/>
-          </svg>
+          <Bot size={22} />
         </div>
         <div>
-          <div className="logo-name">ChatAgent</div>
-          <div className="logo-sub">Admin Panel</div>
+          <div className="logo-name">ChatAgent Studio</div>
+          <div className="logo-sub">Production RAG Engine</div>
         </div>
       </div>
 
       <nav className="sidebar-nav">
-        <div className="nav-group-label">Navigation</div>
-        <NavLink to="/" end className={({isActive}) => isActive ? 'nav-item active' : 'nav-item'}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-          Dashboard
+        <div className="nav-group-label">Showcase & Testing</div>
+        <NavLink to="/" end className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+          <LayoutDashboard size={17} />
+          <span>Dashboard</span>
         </NavLink>
-        <NavLink to="/register" className={({isActive}) => isActive ? 'nav-item active' : 'nav-item'}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
-          </svg>
-          Add Website
+
+        <NavLink to="/test" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+          <Sparkles size={17} className="text-warn" />
+          <span>Live Playground</span>
         </NavLink>
+
+        <NavLink to="/tutorial" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+          <Video size={17} className="text-accent" />
+          <span>Video Tutorial</span>
+        </NavLink>
+
+        <div className="nav-group-label" style={{ marginTop: 18 }}>Management</div>
+        <NavLink to="/register" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+          <PlusCircle size={17} />
+          <span>Add Website</span>
+        </NavLink>
+
+        <button className="nav-item arch-nav-btn" onClick={onOpenArchitecture}>
+          <Layers size={17} className="text-teal" />
+          <span>Architecture Deep Dive</span>
+        </button>
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-footer-text">v1.0.0 · Built with Groq</div>
+        <div className="sidebar-tech-stack">
+          <span className="tech-pill">Groq Llama 3.1</span>
+          <span className="tech-pill">ChromaDB</span>
+        </div>
+        <div className="sidebar-footer-text">Decoupled RAG Pipeline v1.0</div>
       </div>
     </aside>
   )
@@ -47,31 +76,68 @@ function Sidebar() {
 
 function Layout() {
   const location = useLocation()
-  const titles = {
-    '/': 'Dashboard',
-    '/register': 'Add New Website',
+  const [isArchOpen, setIsArchOpen] = useState(false)
+  const [apiOnline, setApiOnline] = useState(null)
+
+  useEffect(() => {
+    checkHealth()
+    const timer = setInterval(checkHealth, 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  async function checkHealth() {
+    try {
+      await axios.get(`${RENDER_API}/api/health`, { timeout: 5000 })
+      setApiOnline(true)
+    } catch {
+      setApiOnline(false)
+    }
   }
-  const title = location.pathname.startsWith('/manage/') ? 'Manage Website' : (titles[location.pathname] || '')
+
+  const titles = {
+    '/': 'RAG System Dashboard',
+    '/test': 'Interactive Testing Playground',
+    '/tutorial': 'Video Walkthrough & Screen Recording',
+    '/register': 'Ingest New Website'
+  }
+  const title = location.pathname.startsWith('/manage/')
+    ? 'Manage & Embed Knowledge Base'
+    : (titles[location.pathname] || 'ChatAgent')
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      <Sidebar onOpenArchitecture={() => setIsArchOpen(true)} />
       <div className="main-wrapper">
         <header className="topbar">
-          <h1 className="page-title">{title}</h1>
+          <div className="topbar-left">
+            <h1 className="page-title">{title}</h1>
+          </div>
+
           <div className="topbar-right">
-            <div className="status-dot" title="API Online" />
-            <span className="status-label">API Online</span>
+            <button className="topbar-arch-btn" onClick={() => setIsArchOpen(true)}>
+              <Layers size={14} /> Architecture
+            </button>
+            <div className="topbar-status">
+              <div className={`status-dot ${apiOnline === false ? 'down' : ''}`} />
+              <span className="status-label">
+                {apiOnline === null ? 'Checking API...' : apiOnline ? 'Render API Online' : 'Cold Booting...'}
+              </span>
+            </div>
           </div>
         </header>
+
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard onOpenArchitecture={() => setIsArchOpen(true)} />} />
+            <Route path="/test" element={<Playground />} />
+            <Route path="/tutorial" element={<VideoTutorial onOpenArchitecture={() => setIsArchOpen(true)} />} />
             <Route path="/register" element={<RegisterSite />} />
             <Route path="/manage/:websiteId" element={<ManageSite />} />
           </Routes>
         </main>
       </div>
+
+      <ArchitectureModal isOpen={isArchOpen} onClose={() => setIsArchOpen(false)} />
     </div>
   )
 }
