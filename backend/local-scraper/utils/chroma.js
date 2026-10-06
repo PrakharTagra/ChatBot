@@ -43,24 +43,34 @@ export async function listSites() {
 
   const sites = await Promise.all(
     collections.map(async (col) => {
-      const websiteId = col.metadata?.websiteId || col.name;
-      const collection = await getClient().getCollection({
-        name: col.name,
-        embeddingFunction: null,
-      });
-      const count = await collection.count();
+      const colName = typeof col === "string" ? col : col.name;
+      const websiteId = (typeof col === "object" && col.metadata?.websiteId) ? col.metadata.websiteId : colName.replace(/^site-/, "");
+      try {
+        const collection = await getClient().getCollection({
+          name: colName,
+          embeddingFunction: null,
+        });
+        const count = await collection.count();
+        const peek = await collection.peek({ limit: 1 });
+        const url = peek.metadatas?.[0]?.url || "";
+        const lastScraped = peek.metadatas?.[0]?.lastScraped || null;
 
-      const peek = await collection.peek({ limit: 1 });
-      const url = peek.metadatas?.[0]?.url || "";
-      const lastScraped = peek.metadatas?.[0]?.lastScraped || null;
-
-      return {
-        websiteId,
-        url,
-        chunks: count,
-        lastScraped,
-        hasLeadCapture: !!collection.metadata?.mongoUri,
-      };
+        return {
+          websiteId,
+          url,
+          chunks: count,
+          lastScraped,
+          hasLeadCapture: !!collection.metadata?.mongoUri,
+        };
+      } catch {
+        return {
+          websiteId,
+          url: "",
+          chunks: 0,
+          lastScraped: null,
+          hasLeadCapture: false,
+        };
+      }
     })
   );
 

@@ -3,94 +3,89 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router
 import axios from 'axios'
 import {
   Database,
-  Cpu,
-  Video,
+  MessageSquare,
   Plus,
   Shield,
-  Layers,
-  ChevronRight,
-  Sparkles,
-  ExternalLink,
-  Users,
-  Code2,
-  Activity
+  Menu,
+  X
 } from 'lucide-react'
 import BrandLogo from './components/BrandLogo.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Playground from './pages/Playground.jsx'
-import VideoTutorial from './pages/VideoTutorial.jsx'
 import RegisterSite from './pages/RegisterSite.jsx'
 import ManageSite from './pages/ManageSite.jsx'
 import ArchitectureModal from './components/ArchitectureModal.jsx'
 import { RENDER_API, APP_NAME } from './config'
 import './App.css'
 
-function Sidebar({ onOpenArchitecture }) {
+function Sidebar({ onOpenArchitecture, isOpen, onClose }) {
   return (
-    <aside className="sidebar">
-      {/* Brand Header */}
-      <div className="sidebar-brand-header">
-        <BrandLogo size={34} />
-      </div>
-
-      {/* Workspace Environment Indicator */}
-      <div className="workspace-selector">
-        <div className="workspace-pill">
-          <span className="ws-dot" />
-          <span className="ws-name">Production · us-east-1</span>
+    <>
+      {isOpen && <div className="sidebar-backdrop" onClick={onClose} />}
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-brand-header">
+          <BrandLogo size={28} />
+          <button className="sidebar-close-btn" onClick={onClose} aria-label="Close menu">
+            <X size={18} />
+          </button>
         </div>
-      </div>
 
-      {/* Navigation Sections */}
-      <nav className="sidebar-nav">
-        <div className="nav-group-label">Intelligence Engine</div>
-
-        <NavLink to="/" end className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-          <Database size={16} />
-          <span>Knowledge Bases</span>
-        </NavLink>
-
-        <NavLink to="/test" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-          <Sparkles size={16} className="text-warn" />
-          <span>Agent Studio</span>
-          <span className="nav-tag">Live</span>
-        </NavLink>
-
-        <NavLink to="/register" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-          <Plus size={16} />
-          <span>Connect Website</span>
-        </NavLink>
-
-        <div className="nav-group-label" style={{ marginTop: 22 }}>Platform & Tour</div>
-
-        <NavLink to="/tutorial" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-          <Video size={16} className="text-teal" />
-          <span>Product Tour & Video</span>
-        </NavLink>
-
-        <button className="nav-item arch-nav-btn" onClick={onOpenArchitecture}>
-          <Shield size={16} className="text-teal" />
-          <span>Security & Guardrails</span>
-        </button>
-      </nav>
-
-      {/* Footer Profile / Engine Specs */}
-      <div className="sidebar-footer">
-        <div className="system-pill">
-          <Activity size={12} className="text-success" />
-          <span>Groq LPU · Chroma Cloud</span>
+        <div className="workspace-selector">
+          <div className="workspace-pill">
+            <span className="ws-dot" />
+            <span className="ws-name">Production Workspace</span>
+          </div>
         </div>
-        <div className="footer-meta">
-          <span>{APP_NAME} Enterprise v2.4</span>
+
+        <nav className="sidebar-nav">
+          <div className="nav-group-label">Navigation</div>
+
+          <NavLink to="/" end className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')} onClick={onClose}>
+            <Database size={15} />
+            <span>Knowledge Bases</span>
+          </NavLink>
+
+          <NavLink to="/test" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')} onClick={onClose}>
+            <MessageSquare size={15} />
+            <span>Chatbot Preview</span>
+          </NavLink>
+
+          <NavLink to="/register" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')} onClick={onClose}>
+            <Plus size={15} />
+            <span>Connect Website</span>
+          </NavLink>
+
+          <div className="nav-group-label" style={{ marginTop: 14 }}>System</div>
+
+          <button
+            className="nav-item arch-nav-btn"
+            onClick={() => {
+              onClose()
+              onOpenArchitecture()
+            }}
+          >
+            <Shield size={15} />
+            <span>Architecture</span>
+          </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="system-pill">
+            <span>Verified Knowledge Search</span>
+          </div>
+          <div className="footer-meta">
+            <span>{APP_NAME} Platform</span>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   )
 }
 
 function Layout() {
   const location = useLocation()
   const [isArchOpen, setIsArchOpen] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [apiOnline, setApiOnline] = useState(null)
   const [apiLatency, setApiLatency] = useState(null)
 
@@ -99,6 +94,11 @@ function Layout() {
     const interval = setInterval(checkHealth, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  // Auto-close mobile drawer when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [location.pathname])
 
   async function checkHealth() {
     const start = performance.now()
@@ -112,41 +112,53 @@ function Layout() {
   }
 
   const titles = {
-    '/': { title: 'Knowledge Bases', subtitle: 'Manage connected websites, vector collections, and sync health' },
-    '/test': { title: 'Agent Studio & Telemetry', subtitle: 'Live conversation simulator, grounding checks, and response metrics' },
-    '/tutorial': { title: 'Product Walkthrough', subtitle: 'Architecture video tour and multi-tenant pipeline overview' },
-    '/register': { title: 'Connect Knowledge Base', subtitle: 'Index a new domain using cloud or high-security crawler agents' }
+    '/': { title: 'Knowledge Bases', subtitle: 'Connected websites and indexed content collections' },
+    '/test': { title: 'Chatbot Preview & Customizer', subtitle: 'Live conversation test and custom brand appearance' },
+    '/register': { title: 'Connect Website', subtitle: 'Index a new domain and generate a custom support widget' }
   }
 
   const currentMeta = location.pathname.startsWith('/manage/')
-    ? { title: 'Knowledge Base Settings & Widget Embed', subtitle: 'CDN snippet, vector chunk inspection, and crawler re-sync' }
-    : (titles[location.pathname] || { title: 'CogniSite AI Console', subtitle: 'Autonomous Website Knowledge Agents' })
+    ? { title: 'Widget Configuration', subtitle: 'Embed code, customization, and content re-crawl' }
+    : (titles[location.pathname] || { title: 'CogniSite', subtitle: 'Website Knowledge Platform' })
 
   return (
     <div className="app-layout">
-      <Sidebar onOpenArchitecture={() => setIsArchOpen(true)} />
+      <Sidebar
+        onOpenArchitecture={() => setIsArchOpen(true)}
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+      />
 
       <div className="main-wrapper">
         <header className="topbar">
           <div className="topbar-left">
-            <h1 className="page-title">{currentMeta.title}</h1>
-            <p className="page-subtitle">{currentMeta.subtitle}</p>
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Open navigation menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div>
+              <h1 className="page-title">{currentMeta.title}</h1>
+              <p className="page-subtitle">{currentMeta.subtitle}</p>
+            </div>
           </div>
 
           <div className="topbar-right">
             <button className="btn btn-ghost btn-sm header-sec-btn" onClick={() => setIsArchOpen(true)}>
-              <Shield size={14} className="text-teal" />
-              <span>Guardrail Specs</span>
+              <Shield size={13} />
+              <span className="btn-label-desktop">Architecture</span>
             </button>
 
             <div className="system-status-badge">
               <div className={`status-dot ${apiOnline === false ? 'down' : ''}`} />
               <span className="status-label">
                 {apiOnline === null
-                  ? 'Verifying Cloud API...'
+                  ? 'Connecting...'
                   : apiOnline
-                  ? `Cloud Connected (${apiLatency}ms)`
-                  : 'Cloud Cold-Booting'}
+                  ? `Connected (${apiLatency}ms)`
+                  : 'Service Standby'}
               </span>
             </div>
           </div>
@@ -156,7 +168,6 @@ function Layout() {
           <Routes>
             <Route path="/" element={<Dashboard onOpenArchitecture={() => setIsArchOpen(true)} />} />
             <Route path="/test" element={<Playground />} />
-            <Route path="/tutorial" element={<VideoTutorial onOpenArchitecture={() => setIsArchOpen(true)} />} />
             <Route path="/register" element={<RegisterSite />} />
             <Route path="/manage/:websiteId" element={<ManageSite />} />
           </Routes>

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { Check, Copy, ArrowRight } from 'lucide-react'
+import { SCRAPER_API, RENDER_API, saveChatbotConfig, addScrapedSite } from '../config'
 import './RegisterSite.css'
-import { SCRAPER_API, RENDER_API } from '../config'
 
 function slugify(str) {
   return str
@@ -18,13 +19,13 @@ export default function RegisterSite() {
   const [url, setUrl] = useState('')
   const [websiteId, setWebsiteId] = useState('')
   const [title, setTitle] = useState('')
-  const [welcomeMsg, setWelcomeMsg] = useState('Hi! I can answer questions about this website. What would you like to know?')
-  const [primaryColor, setPrimaryColor] = useState('#6c63ff')
+  const [welcomeMsg, setWelcomeMsg] = useState('Hello. How can I assist you with this website?')
+  const [primaryColor, setPrimaryColor] = useState('#0f172a')
   const [logoUrl, setLogoUrl] = useState('')
   const [mongoUri, setMongoUri] = useState('')
   const [idTouched, setIdTouched] = useState(false)
 
-  const [step, setStep] = useState('form') 
+  const [step, setStep] = useState('form')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [logs, setLogs] = useState([])
@@ -43,33 +44,66 @@ export default function RegisterSite() {
   async function handleSubmit() {
     if (!url.trim()) { setError('Website URL is required.'); return }
     if (!websiteId.trim()) { setError('Website ID is required.'); return }
-    if (!/^[a-z0-9-]+$/.test(websiteId)) { setError('Website ID can only contain lowercase letters, numbers, and hyphens.'); return }
+    if (!/^[a-z0-9-]+$/.test(websiteId)) {
+      setError('Website ID can only contain lowercase letters, numbers, and hyphens.')
+      return
+    }
+
+    // Save the customized chatbot config immediately
+    saveChatbotConfig(websiteId, {
+      title: title.trim() || `${websiteId} Assistant`,
+      welcomeMessage: welcomeMsg.trim() || `Hello. How can I assist you with ${websiteId}?`,
+      primaryColor: primaryColor || '#0f172a',
+      logoUrl: logoUrl.trim()
+    })
 
     setError('')
     setStep('scraping')
     setLogs([])
-    addLog(`Starting scrape for ${url}…`)
+    addLog(`Connecting to crawler worker for ${url}...`)
 
     try {
-      addLog('Sending request to backend…')
-      const res = await axios.post(`${SCRAPER_API}/api/scrape`, { url, websiteId, mongoUri: mongoUri.trim() || undefined })
-      addLog(`✅ Scraped ${res.data.pagesScraped} pages`)
-      addLog(`✅ Stored ${res.data.chunksStored} content chunks`)
-      addLog('Done! Your widget is ready.')
+      addLog('Sending request to crawler...')
+      const res = await axios.post(`${SCRAPER_API}/api/scrape`, {
+        url,
+        websiteId,
+        mongoUri: mongoUri.trim() || undefined
+      })
+      addLog(`Crawled ${res.data.pagesScraped} pages`)
+      addLog(`Indexed ${res.data.chunksStored} content chunks`)
+      addLog('Crawl complete. Chatbot widget is ready.')
       setResult(res.data)
+
+      addScrapedSite({
+        websiteId,
+        name: title.trim() || websiteId,
+        url,
+        chunks: res.data.chunksStored || 0,
+        pages: res.data.pagesScraped || 0,
+        lastSync: new Date().toISOString(),
+        description: `Indexed knowledge base for ${url}`
+      })
+
+      saveChatbotConfig(websiteId, {
+        title: title.trim() || `${websiteId} Assistant`,
+        welcomeMessage: welcomeMsg.trim() || `Hello. How can I assist you with ${websiteId}?`,
+        primaryColor: primaryColor || '#0f172a',
+        logoUrl: logoUrl.trim()
+      })
+
       setStep('done')
     } catch (e) {
       let msg = e.response?.data?.error || e.message
-      if (msg.includes('Network Error') || e.code === 'ERR_NETWORK') {
-        msg = 'Local scraper worker not detected on http://localhost:5000. Start it via: "cd backend/local-scraper && npm run dev", or test pre-indexed sites in the Playground.'
+      if (msg.includes('Network Error')) {
+        msg = 'Crawler worker not detected on http://localhost:5000. Run "cd backend/local-scraper && npm run dev" first.'
       }
-      setError(`Scrape failed: ${msg}`)
-      addLog(`❌ Error: ${msg}`)
+      setError(`Crawl failed: ${msg}`)
+      addLog(`Error: ${msg}`)
       setStep('form')
     }
   }
 
-  const embedSnippet = `<!-- ChatAgent Widget -->
+  const embedSnippet = `<!-- CogniSite Chatbot Widget -->
 <script src="${RENDER_API}/widget/chat-widget.js" defer></script>
 <script defer>
   document.addEventListener("DOMContentLoaded", function() {
@@ -87,35 +121,17 @@ export default function RegisterSite() {
     <div className="register-page fade-in">
       {step !== 'done' && (
         <div className="register-grid">
-          {/* Form */}
+          {/* Main Form */}
           <div className="register-form-col">
             <div className="card">
-              <div style={{
-                background: 'rgba(6, 182, 212, 0.08)',
-                border: '1px solid rgba(6, 182, 212, 0.25)',
-                borderRadius: 8,
-                padding: '14px 16px',
-                marginBottom: 20,
-                fontSize: 13,
-                lineHeight: 1.5
-              }}>
-                <strong style={{ color: 'var(--accent3)', display: 'block', marginBottom: 4 }}>
-                  🛡️ Enterprise Private Ingestion Agent:
-                </strong>
-                For firewalled domains, anti-bot protection, or JavaScript-heavy single-page applications, crawl execution is handled by your isolated crawler agent (Playwright + Crawlee) feeding directly into ChromaDB Cloud:
-                <pre style={{
-                  background: 'var(--bg)',
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  marginTop: 8,
-                  fontSize: 12,
-                  fontFamily: 'DM Mono, monospace',
-                  color: 'var(--text)'
-                }}>cd backend/local-scraper && npm run dev</pre>
+              <div className="worker-info-banner">
+                <strong>Crawler Worker Setup:</strong>
+                <p>Website indexing is processed by your local crawler agent (Playwright) feeding into the cloud database:</p>
+                <code>cd backend/local-scraper && npm run dev</code>
               </div>
 
-              <h2 className="form-section-title">Domain & Tenant Configuration</h2>
-              <p className="form-section-desc">Specify the target website URL to crawl and vectorize into a dedicated Chroma Cloud collection.</p>
+              <h2 className="form-section-title">Website Details</h2>
+              <p className="form-section-desc">Enter the domain to crawl and create a searchable index.</p>
               <div className="divider" />
 
               <div className="field">
@@ -123,7 +139,7 @@ export default function RegisterSite() {
                 <input
                   className="input"
                   type="url"
-                  placeholder="https://yourwebsite.com"
+                  placeholder="https://example.com"
                   value={url}
                   onChange={e => handleUrlChange(e.target.value)}
                   disabled={step === 'scraping'}
@@ -131,7 +147,7 @@ export default function RegisterSite() {
               </div>
 
               <div className="field">
-                <label>Website ID *</label>
+                <label>Website Identifier *</label>
                 <input
                   className="input mono"
                   type="text"
@@ -140,16 +156,16 @@ export default function RegisterSite() {
                   onChange={e => { setIdTouched(true); setWebsiteId(e.target.value) }}
                   disabled={step === 'scraping'}
                 />
-                <p className="field-hint">Unique identifier. Auto-generated from URL. Only a-z, 0-9, hyphens.</p>
+                <span className="field-hint">Unique identifier used for your database and widget code.</span>
               </div>
 
               <div className="divider" />
-              <h2 className="form-section-title">Widget Customization</h2>
-              <p className="form-section-desc">These settings appear in the embed snippet.</p>
+              <h2 className="form-section-title">Chatbot Branding & Colors</h2>
+              <p className="form-section-desc">Customize the appearance of the customer-facing chatbot.</p>
               <div className="divider" />
 
               <div className="field">
-                <label>Chat Title</label>
+                <label>Chatbot Title</label>
                 <input
                   className="input"
                   type="text"
@@ -161,20 +177,37 @@ export default function RegisterSite() {
               </div>
 
               <div className="field">
-                <label>Logo URL <span style={{ fontWeight: 400, color: 'var(--text2)' }}>(optional)</span></label>
+                <label>Theme Color</label>
+                <div className="color-row">
+                  <input
+                    type="color"
+                    value={primaryColor}
+                    onChange={e => setPrimaryColor(e.target.value)}
+                    className="color-picker"
+                  />
+                  <input
+                    className="input mono"
+                    value={primaryColor}
+                    onChange={e => setPrimaryColor(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Logo URL (Optional)</label>
                 <input
                   className="input"
                   type="url"
-                  placeholder="https://yourwebsite.com/logo.png"
+                  placeholder="https://example.com/logo.png"
                   value={logoUrl}
                   onChange={e => setLogoUrl(e.target.value)}
                   disabled={step === 'scraping'}
                 />
-                <p className="field-hint">A publicly accessible image URL. Shown as a circular avatar in the chat header. Leave blank to show only the title.</p>
               </div>
 
               <div className="field">
-                <label>Welcome Message</label>
+                <label>Initial Welcome Message</label>
                 <textarea
                   className="input"
                   rows={2}
@@ -185,50 +218,42 @@ export default function RegisterSite() {
                 />
               </div>
 
-              <div className="field">
-                <label>Primary Color</label>
-                <div className="color-row">
-                  <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="color-picker" />
-                  <input className="input mono" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} style={{ flex: 1 }} />
-                </div>
-              </div>
-
               <div className="divider" />
-              <h2 className="form-section-title">Lead Capture (Optional)</h2>
-              <p className="form-section-desc">When the chatbot can't answer, it will ask the visitor for their name, email, and mobile — and save them to your MongoDB.</p>
+              <h2 className="form-section-title">Lead Storage (Optional)</h2>
+              <p className="form-section-desc">Customer contact requests will be stored in your database.</p>
               <div className="divider" />
 
               <div className="field">
-                <label>MongoDB Connection URI</label>
+                <label>Database Connection URI</label>
                 <input
                   className="input mono"
                   type="password"
-                  placeholder="mongodb+srv://user:pass@cluster.mongodb.net/dbname"
+                  placeholder="mongodb+srv://..."
                   value={mongoUri}
                   onChange={e => setMongoUri(e.target.value)}
                   disabled={step === 'scraping'}
                 />
-                <p className="field-hint">Your URI is never stored on our servers — it's held in memory only for the duration of the session. Leave blank to disable lead capture.</p>
+                <span className="field-hint">Stored securely on the server. Leave blank to disable lead capture.</span>
               </div>
 
-              {error && <div className="error-box">⚠️ {error}</div>}
+              {error && <div className="error-box">{error}</div>}
 
               <button
                 className="btn btn-primary btn-lg"
-                style={{ width: '100%', marginTop: '8px', justifyContent: 'center' }}
+                style={{ width: '100%', marginTop: '8px' }}
                 onClick={handleSubmit}
                 disabled={step === 'scraping'}
               >
-                {step === 'scraping' ? <><span className="spinner" /> Scraping…</> : '🚀 Scrape & Index Website'}
+                {step === 'scraping' ? <><span className="spinner" /> Crawling...</> : 'Crawl & Index Website'}
               </button>
             </div>
           </div>
 
-          {}
+          {/* Side Column: Preview & Terminal Logs */}
           <div className="register-side-col">
             {logs.length > 0 && (
               <div className="card log-card">
-                <h3 className="log-title">Scrape Log</h3>
+                <h3 className="log-title">Crawl Progress</h3>
                 <div className="log-body">
                   {logs.map((l, i) => (
                     <div key={i} className="log-line">
@@ -236,14 +261,20 @@ export default function RegisterSite() {
                       <span>{l.msg}</span>
                     </div>
                   ))}
-                  {step === 'scraping' && <div className="log-line"><span className="spinner" style={{ width: 12, height: 12 }} /></div>}
+                  {step === 'scraping' && (
+                    <div className="log-line">
+                      <span className="spinner" style={{ width: 12, height: 12 }} />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             <div className="card preview-card">
-              <h3 className="log-title">Embed Snippet Preview</h3>
-              <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>This snippet will go on your client's website.</p>
+              <h3 className="log-title">Widget Embed Preview</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                This script snippet is ready for your site.
+              </p>
               <pre className="code-block">{embedSnippet}</pre>
             </div>
           </div>
@@ -256,7 +287,14 @@ export default function RegisterSite() {
           result={result}
           embedSnippet={embedSnippet}
           onManage={() => navigate(`/manage/${websiteId}`)}
-          onAddAnother={() => { setStep('form'); setUrl(''); setWebsiteId(''); setIdTouched(false); setLogs([]); setResult(null) }}
+          onAddAnother={() => {
+            setStep('form')
+            setUrl('')
+            setWebsiteId('')
+            setIdTouched(false)
+            setLogs([])
+            setResult(null)
+          }}
         />
       )}
     </div>
@@ -273,30 +311,30 @@ function DoneScreen({ websiteId, result, embedSnippet, onManage, onAddAnother })
   }
 
   return (
-    <div className="done-screen fade-in">
+    <div className="done-screen fade-in card">
       <div className="done-hero">
-        <div className="done-check">✅</div>
-        <h2>Website Indexed Successfully!</h2>
-        <p>{result.pagesScraped} pages scraped · {result.chunksStored} chunks stored</p>
-        <div className="badge badge-purple mono" style={{ marginTop: 8 }}>ID: {websiteId}</div>
+        <h2>Website Indexed Successfully</h2>
+        <p>{result.pagesScraped} pages crawled · {result.chunksStored} content chunks stored</p>
+        <span className="badge badge-purple mono" style={{ marginTop: 8 }}>ID: {websiteId}</span>
       </div>
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700 }}>Your Embed Snippet</h3>
+      <div style={{ marginTop: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <h3 style={{ fontSize: 13.5, fontWeight: 600 }}>Your Embed Snippet</h3>
           <button className="btn btn-ghost btn-sm" onClick={copy}>
-            {copied ? '✅ Copied!' : '📋 Copy'}
+            {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
         </div>
         <pre className="code-block">{embedSnippet}</pre>
-        <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 10 }}>
-          Paste this just before the <code style={{ background: 'var(--bg3)', padding: '1px 5px', borderRadius: 4 }}>&lt;/body&gt;</code> tag on your client's website.
-        </p>
       </div>
 
-      <div className="done-actions">
-        <button className="btn btn-primary btn-lg" onClick={onManage}>Manage This Site →</button>
-        <button className="btn btn-ghost" onClick={onAddAnother}>+ Add Another Website</button>
+      <div className="done-actions" style={{ marginTop: 18 }}>
+        <button className="btn btn-primary" onClick={onManage}>
+          Configure Chatbot
+        </button>
+        <button className="btn btn-ghost" onClick={onAddAnother}>
+          Connect Another Website
+        </button>
       </div>
     </div>
   )

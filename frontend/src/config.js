@@ -1,53 +1,84 @@
 export const SCRAPER_API = import.meta.env.VITE_SCRAPER_URL || 'http://localhost:5000'
 export const RENDER_API = import.meta.env.VITE_API_URL || 'https://chatbot-n350.onrender.com'
 
-export const APP_NAME = 'CogniSite AI'
-export const APP_TAGLINE = 'Autonomous Website Knowledge Agents & Grounded RAG Platform'
+export const APP_NAME = 'CogniSite'
+export const APP_TAGLINE = 'Website Knowledge Base & Customer Support Platform'
 
-// Pre-Configured Enterprise Knowledge Bases
-export const ENTERPRISE_KNOWLEDGE_BASES = [
-  {
-    websiteId: 'd2itechnology',
-    name: 'd2i Technology Cloud',
-    url: 'https://d2itechnology.com',
-    description: 'Enterprise IT solutions, cloud infrastructure architectures, and mission-critical software engineering.',
-    chunks: 142,
-    status: 'Operational',
-    lastSync: '2026-04-05T09:15:00.000Z',
-    sampleQuestions: [
-      'What enterprise cloud engineering services do you provide?',
-      'How does your cloud migration roadmap work?',
-      'How do I schedule a technical consultation with the solutions team?',
-      'What industries and compliance standards do you specialize in?'
-    ]
-  },
-  {
-    websiteId: 'portfolio-demo',
-    name: 'Engineering Systems & Architecture',
-    url: 'https://github.com/PrakharTagra',
-    description: 'Autonomous AI infrastructure, RAG pipelines, distributed vector indexing, and low-latency microservices.',
-    chunks: 68,
-    status: 'Operational',
-    lastSync: '2026-04-06T11:20:00.000Z',
-    sampleQuestions: [
-      'What is the decoupled architecture of this RAG pipeline?',
-      'How does the dual-threshold confidence gate prevent hallucinations?',
-      'Why is the crawler separated from the real-time inference API?',
-      'How is tenant data isolated across ChromaDB and MongoDB collections?'
-    ]
+// Active knowledge bases created by scraping
+export const ENTERPRISE_KNOWLEDGE_BASES = []
+
+// Local storage site registry helpers
+export function getScrapedSites() {
+  try {
+    const list = localStorage.getItem('cognisite_indexed_sites')
+    return list ? JSON.parse(list) : []
+  } catch (err) {
+    void err
+    return []
   }
-]
+}
 
-// Product Tour Video Configuration
-export const PRODUCT_TOUR_CONFIG = {
-  defaultVideoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-  title: 'CogniSite Platform Tour & Technical Architecture Walkthrough',
-  chapters: [
-    { time: '0:00', title: 'CogniSite Platform Overview & Enterprise RAG' },
-    { time: '0:45', title: 'Autonomous Playwright Crawler & Semantic Extraction' },
-    { time: '1:30', title: 'High-Dimensional Vector Embeddings (Chroma Cloud)' },
-    { time: '2:15', title: 'Sub-300ms Inference via Groq LPU (Llama 3.1 8B)' },
-    { time: '3:00', title: 'Dual-Threshold Confidence Gate & Zero-Hallucination Sentinel' },
-    { time: '3:45', title: 'Instant CDN Widget Deployment & Isolated Lead Routing' },
-  ]
+export function addScrapedSite(siteData) {
+  try {
+    const current = getScrapedSites()
+    const existingIndex = current.findIndex(s => s.websiteId === siteData.websiteId)
+    if (existingIndex >= 0) {
+      current[existingIndex] = { ...current[existingIndex], ...siteData }
+    } else {
+      current.unshift(siteData)
+    }
+    localStorage.setItem('cognisite_indexed_sites', JSON.stringify(current))
+  } catch (err) {
+    void err
+  }
+}
+
+export function removeScrapedSite(websiteId) {
+  try {
+    const current = getScrapedSites().filter(s => s.websiteId !== websiteId)
+    localStorage.setItem('cognisite_indexed_sites', JSON.stringify(current))
+    localStorage.removeItem(`cognisite_bot_${websiteId}`)
+  } catch (err) {
+    void err
+  }
+}
+
+export function clearAllLocalSites() {
+  try {
+    const current = getScrapedSites()
+    current.forEach(s => localStorage.removeItem(`cognisite_bot_${s.websiteId}`))
+    localStorage.removeItem('cognisite_indexed_sites')
+  } catch (err) {
+    void err
+  }
+}
+
+// Helper to get or customize chatbot settings per website
+export function getChatbotConfig(websiteId, fallback = null) {
+  try {
+    const saved = localStorage.getItem(`cognisite_bot_${websiteId}`)
+    if (saved) return JSON.parse(saved)
+  } catch (err) {
+    void err
+  }
+
+  const base = ENTERPRISE_KNOWLEDGE_BASES.find(b => b.websiteId === websiteId)
+  if (base?.chatbot) return base.chatbot
+
+  if (fallback?.chatbot) return fallback.chatbot
+
+  return {
+    title: `${websiteId} Assistant`,
+    welcomeMessage: `Hello. How can I assist you with information about ${websiteId}?`,
+    primaryColor: '#0f172a',
+    logoUrl: ''
+  }
+}
+
+export function saveChatbotConfig(websiteId, config) {
+  try {
+    localStorage.setItem(`cognisite_bot_${websiteId}`, JSON.stringify(config))
+  } catch (err) {
+    void err
+  }
 }

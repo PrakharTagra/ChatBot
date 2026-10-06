@@ -1,38 +1,46 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import {
+  Code2,
+  Settings2,
+  RefreshCw,
+  Copy,
+  Check,
+  Save,
+  MessageSquare,
+  Globe,
+  ExternalLink
+} from 'lucide-react'
+import { SCRAPER_API, RENDER_API, getChatbotConfig, saveChatbotConfig, addScrapedSite } from '../config'
 import './ManageSite.css'
-import { SCRAPER_API, RENDER_API } from '../config'
 
 export default function ManageSite() {
   const { websiteId } = useParams()
   const navigate = useNavigate()
 
-  const [tab, setTab] = useState('embed') 
+  const [tab, setTab] = useState('embed')
   const [copied, setCopied] = useState(false)
-  const [backendOk, setBackendOk] = useState(null) 
+  const [backendOk, setBackendOk] = useState(null)
 
+  // Chatbot Branding State
+  const [botConfig, setBotConfig] = useState(() => getChatbotConfig(websiteId))
+  const [title, setTitle] = useState(botConfig.title || `${websiteId} Assistant`)
+  const [welcomeMsg, setWelcomeMsg] = useState(botConfig.welcomeMessage || `Hello. How can I assist you with ${websiteId}?`)
+  const [primaryColor, setPrimaryColor] = useState(botConfig.primaryColor || '#0f172a')
+  const [logoUrl, setLogoUrl] = useState(botConfig.logoUrl || '')
+  const [brandSaved, setBrandSaved] = useState(false)
+
+  // Re-scrape State
   const [newUrl, setNewUrl] = useState('')
   const [mongoUri, setMongoUri] = useState('')
   const [scraping, setScraping] = useState(false)
   const [scrapeResult, setScrapeResult] = useState(null)
   const [scrapeError, setScrapeError] = useState('')
 
-  const [chatMessages, setChatMessages] = useState([
-    { role: 'bot', text: `👋 Hi! Ask me anything — I'll search the indexed content for "${websiteId}".` }
-  ])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const chatEndRef = useRef(null)
-  const chatHistoryRef = useRef([])
-
   useEffect(() => {
-    if (tab === 'test' && backendOk === null) checkBackend()
-  }, [tab])
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+    checkBackend()
+  }, [])
 
   async function checkBackend() {
     try {
@@ -43,8 +51,25 @@ export default function ManageSite() {
     }
   }
 
+  function handleSaveBrand() {
+    const updated = {
+      title: title.trim() || `${websiteId} Assistant`,
+      welcomeMessage: welcomeMsg.trim() || `Hello. How can I assist you with ${websiteId}?`,
+      primaryColor: primaryColor || '#0f172a',
+      logoUrl: logoUrl.trim()
+    }
+    setBotConfig(updated)
+    saveChatbotConfig(websiteId, updated)
+    addScrapedSite({
+      websiteId,
+      name: updated.title
+    })
+    setBrandSaved(true)
+    setTimeout(() => setBrandSaved(false), 2000)
+  }
+
   async function handleRescrape() {
-    if (!newUrl.trim()) { setScrapeError('Enter the website URL to scrape.'); return }
+    if (!newUrl.trim()) { setScrapeError('Please enter a target URL.'); return }
     setScraping(true)
     setScrapeResult(null)
     setScrapeError('')
@@ -55,74 +80,40 @@ export default function ManageSite() {
         ...(mongoUri.trim() ? { mongoUri: mongoUri.trim() } : {}),
       })
       setScrapeResult(res.data)
+      addScrapedSite({
+        websiteId,
+        name: title.trim() || websiteId,
+        url: newUrl,
+        chunks: res.data.chunksStored || 0,
+        pages: res.data.pagesScraped || 0,
+        lastSync: new Date().toISOString()
+      })
     } catch (e) {
-      setScrapeError(e.response?.data?.error || e.message)
+      let msg = e.response?.data?.error || e.message
+      if (msg.includes('Network Error')) {
+        msg = 'Crawler worker not detected on http://localhost:5000. Run "cd backend/local-scraper && npm run dev" first.'
+      }
+      setScrapeError(msg)
     } finally {
       setScraping(false)
     }
   }
 
-  async function sendChatMessage() {
-    const msg = chatInput.trim()
-    if (!msg || chatLoading) return
-    setChatInput('')
-
-    const userMsg = { role: 'user', text: msg }
-    setChatMessages(prev => [...prev, userMsg])
-
-    const history = chatHistoryRef.current.map(m => ({
-      role: m.role === 'bot' ? 'assistant' : 'user',
-      content: m.text
-    }))
-    chatHistoryRef.current = [...chatHistoryRef.current, userMsg]
-
-    setChatLoading(true)
-    try {
-      const res = await axios.post(`${RENDER_API}/api/chat`, {
-        message: msg,
-        websiteId,
-        history: history.slice(-6)
-      })
-      const { answer, source, confident, contactUrl } = res.data
-
-      let sourceLabel = null
-      if (source) {
-        try { sourceLabel = new URL(source).pathname || source } catch { sourceLabel = source }
-      }
-
-      const botMsg = {
-        role: 'bot',
-        text: answer,
-        source,
-        sourceLabel,
-        confident,
-        contactUrl,
-      }
-      setChatMessages(prev => [...prev, botMsg])
-      chatHistoryRef.current = [...chatHistoryRef.current, { role: 'bot', text: answer }]
-    } catch (e) {
-      const errMsg = { role: 'bot', text: '❌ Error: ' + (e.response?.data?.error || e.message) }
-      setChatMessages(prev => [...prev, errMsg])
-    } finally {
-      setChatLoading(false)
-    }
-  }
-
-  const embedSnippet = `<!-- CogniSite AI Autonomous Widget -->
+  const embedSnippet = `<!-- CogniSite Chatbot Widget -->
 <script src="${RENDER_API}/widget/chat-widget.js" defer></script>
 <script defer>
   document.addEventListener("DOMContentLoaded", function() {
     ChatWidget.init({
       websiteId: "${websiteId}",
       apiUrl: "${RENDER_API}",
-      title: "Knowledge Assistant",
-      welcomeMessage: "👋 Welcome! How may I assist you with information regarding ${websiteId}?",
-      primaryColor: "#6366f1"
+      title: "${title || `${websiteId} Assistant`}",
+      welcomeMessage: "${welcomeMsg}",
+      primaryColor: "${primaryColor}"${logoUrl.trim() ? `,\n      logoUrl: "${logoUrl.trim()}"` : ''}
     });
   });
 </script>`
 
-  function copy() {
+  function copySnippet() {
     navigator.clipboard.writeText(embedSnippet)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -131,228 +122,196 @@ export default function ManageSite() {
   return (
     <div className="manage-page fade-in">
       <div className="manage-header">
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Fleet Overview</button>
-        <div>
-          <h2 className="manage-title">Knowledge Base: <span className="mono accent">{websiteId}</span></h2>
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>
+          Back
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h2 className="manage-title">Website: <span className="mono">{websiteId}</span></h2>
+          {backendOk !== null && (
+            <span className={`status-badge ${backendOk ? 'status-ready' : 'status-pending'}`} style={{ fontSize: '11px', padding: '3px 8px' }}>
+              {backendOk ? 'API Live' : 'API Connecting...'}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="tabs">
-        {[
-          { id: 'embed', label: '📋 CDN Embed Code' },
-          { id: 'test', label: '💬 Agent Studio' },
-          { id: 'rescrape', label: '🔄 Ingestion Re-Sync' },
-        ].map(t => (
-          <button
-            key={t.id}
-            className={`tab-btn ${tab === t.id ? 'active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+        <button
+          className={`tab-btn ${tab === 'embed' ? 'active' : ''}`}
+          onClick={() => setTab('embed')}
+        >
+          <Code2 size={13} /> Embed Code
+        </button>
+        <button
+          className={`tab-btn ${tab === 'branding' ? 'active' : ''}`}
+          onClick={() => setTab('branding')}
+        >
+          <Settings2 size={13} /> Chatbot Appearance
+        </button>
+        <button
+          className={`tab-btn ${tab === 'rescrape' ? 'active' : ''}`}
+          onClick={() => setTab('rescrape')}
+        >
+          <RefreshCw size={13} /> Re-Crawl
+        </button>
       </div>
 
       <div className="tab-content">
-
-        {}
+        {/* Tab 1: Embed Code */}
         {tab === 'embed' && (
           <div className="card fade-in">
             <div className="tab-header">
               <div>
-                <h3>Embed on Any Website</h3>
-                <p>Paste this snippet just before the <code>&lt;/body&gt;</code> tag on your client's website.</p>
+                <h3>Embed Widget Code</h3>
+                <p>Paste this code snippet before the closing <code>&lt;/body&gt;</code> tag of your website.</p>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={copy}>
-                {copied ? '✅ Copied!' : '📋 Copy Snippet'}
+              <button className="btn btn-primary btn-sm" onClick={copySnippet}>
+                {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy Code</>}
               </button>
             </div>
             <pre className="code-block">{embedSnippet}</pre>
 
             <div className="divider" />
-            <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Advanced Options</h4>
-            <pre className="code-block">{`<!-- ChatAgent Widget -->
-<script src="${RENDER_API}/widget/chat-widget.js" defer></script>
-<script defer>
-  document.addEventListener("DOMContentLoaded", function() {
-    ChatWidget.init({
-      websiteId: "${websiteId}",
-      apiUrl: "${RENDER_API}",
-      title: "Website Assistant",
-      welcomeMessage: "Hi! How can I help?",
-      primaryColor: "#6c63ff",
-      position: "bottom-right"
-    });
-  });
-</script>`}</pre>
-          </div>
-        )}
-
-        {}
-        {/* Live Test Tab */}
-        {tab === 'test' && (
-          <div className="card fade-in chat-test-card">
-            <div className="tab-header">
-              <div>
-                <h3>Live Chat Playground: {websiteId}</h3>
-                <p>Test AI responses against the indexed content for <strong>{websiteId}</strong>.</p>
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => navigate(`/test?site=${websiteId}`)}
-                  style={{ color: 'var(--accent3)' }}
-                >
-                  ⚡ Open Full Studio
-                </button>
-                {backendOk === null && <span className="badge" style={{ background: 'var(--bg3)', color: 'var(--text2)' }}>⏳ Checking…</span>}
-                {backendOk === true && <span className="badge badge-green">● Connected</span>}
-                {backendOk === false && <span className="badge" style={{ background: '#3d1a1a', color: '#f87171' }}>● Backend down</span>}
-              </div>
-            </div>
-
-            {/* Quick Suggestion Chips */}
-            <div style={{ display: 'flex', gap: 8, padding: '8px 12px', background: 'var(--bg3)', borderRadius: 8, overflowX: 'auto', marginBottom: 12 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', alignSelf: 'center', whiteSpace: 'nowrap' }}>✨ Quick Prompts:</span>
-              {['What services do you provide?', 'How can I get in touch?', 'Where are you based?'].map((chip, idx) => (
-                <button
-                  key={idx}
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: 11, padding: '4px 10px', height: 'auto', whiteSpace: 'nowrap' }}
-                  onClick={() => {
-                    setChatInput(chip)
-                    setTimeout(() => {
-                      const inputElem = document.querySelector('.chat-input-row input')
-                      if (inputElem) inputElem.focus()
-                    }, 50)
-                  }}
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-
-            <div className="chat-window">
-              {chatMessages.map((m, i) => (
-                <div key={i} className={`chat-msg chat-msg--${m.role}`}>
-                  <div className="chat-bubble">
-                    {m.text}
-                    {m.sourceLabel && (
-                      <a href={m.source} target="_blank" rel="noopener noreferrer" className="chat-source">
-                        🔗 {m.sourceLabel}
-                      </a>
-                    )}
-                    {m.contactUrl && (
-                      <div style={{ marginTop: 8 }}>
-                        <a href={m.contactUrl} target="_blank" rel="noopener noreferrer"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-                            background: 'var(--accent)', color: '#fff', borderRadius: 20,
-                            fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
-                          ✉️ Contact Us
-                        </a>
-                      </div>
-                    )}
-                    {m.confident === false && (
-                      <div className="chat-label">⚠️ Low confidence — contact page available</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {chatLoading && (
-                <div className="chat-msg chat-msg--bot">
-                  <div className="chat-bubble typing">
-                    <span /><span /><span />
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            <div className="chat-input-row">
-              <input
-                className="input"
-                placeholder="Ask something about this website…"
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
-                disabled={chatLoading}
-              />
-              <button className="btn btn-primary" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
-                Send
+            <div className="quick-test-action">
+              <span>Want to test this chatbot before publishing?</span>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => navigate(`/test?site=${websiteId}`)}
+              >
+                <MessageSquare size={13} /> Test in Preview
               </button>
             </div>
           </div>
         )}
 
-        {/* Re-scrape Tab */}
+        {/* Tab 2: Chatbot Appearance */}
+        {tab === 'branding' && (
+          <div className="card fade-in">
+            <div className="tab-header">
+              <div>
+                <h3>Chatbot Appearance & Customization</h3>
+                <p>Set the brand color, title, and logo used by this website's chatbot widget.</p>
+              </div>
+            </div>
+
+            <div className="branding-form-grid">
+              <div className="field">
+                <label>Chatbot Title</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="e.g. Website Assistant"
+                />
+              </div>
+
+              <div className="field">
+                <label>Primary Brand Color</label>
+                <div className="color-row">
+                  <input
+                    type="color"
+                    value={primaryColor}
+                    onChange={e => setPrimaryColor(e.target.value)}
+                    className="color-picker"
+                  />
+                  <input
+                    type="text"
+                    className="input mono"
+                    value={primaryColor}
+                    onChange={e => setPrimaryColor(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Logo URL (Optional)</label>
+                <input
+                  type="url"
+                  className="input"
+                  value={logoUrl}
+                  onChange={e => setLogoUrl(e.target.value)}
+                  placeholder="https://example.com/logo.png"
+                />
+                <span className="field-hint">A direct link to an image file. Leave empty to use the standard icon.</span>
+              </div>
+
+              <div className="field full-width">
+                <label>Welcome Message</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={welcomeMsg}
+                  onChange={e => setWelcomeMsg(e.target.value)}
+                  placeholder="Greeting displayed when a visitor opens the widget"
+                />
+              </div>
+            </div>
+
+            <div className="branding-actions">
+              <button className="btn btn-primary btn-sm" onClick={handleSaveBrand}>
+                <Save size={13} /> {brandSaved ? 'Saved' : 'Save Appearance'}
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => navigate(`/test?site=${websiteId}`)}
+              >
+                <MessageSquare size={13} /> Preview Live Chatbot
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Re-scrape */}
         {tab === 'rescrape' && (
           <div className="card fade-in">
             <div className="tab-header">
               <div>
-                <h3>Re-scrape Website</h3>
-                <p>Run a fresh crawl to update the indexed content. Old chunks will be replaced.</p>
+                <h3>Re-crawl Website</h3>
+                <p>Run a fresh crawl to update the indexed content. Existing chunks will be updated.</p>
               </div>
             </div>
 
-            <div style={{
-              background: 'rgba(6, 182, 212, 0.08)',
-              border: '1px solid rgba(6, 182, 212, 0.25)',
-              borderRadius: 8,
-              padding: 14,
-              fontSize: 13,
-              marginBottom: 18,
-              lineHeight: 1.5,
-              maxWidth: 560
-            }}>
-              <strong style={{ color: 'var(--accent3)', display: 'block', marginBottom: 4 }}>
-                🛡️ Enterprise Ingestion Agent Protocol:
-              </strong>
-              Dynamic crawling is managed by your decoupled worker agent (Playwright/Crawlee) to ensure firewalled JS rendering without overloading real-time chat APIs. Verify your ingestion worker is active:
-              <pre style={{
-                background: 'var(--bg)',
-                padding: '8px 12px',
-                borderRadius: 6,
-                marginTop: 8,
-                fontSize: 12,
-                fontFamily: 'DM Mono, monospace',
-                color: 'var(--text)'
-              }}>cd backend/local-scraper && npm run dev</pre>
+            <div className="crawler-notice">
+              <strong>Crawler Worker Instructions:</strong>
+              <p>Dynamic page extraction is handled by your background worker (Playwright). Ensure the local crawler is running:</p>
+              <code>cd backend/local-scraper && npm run dev</code>
             </div>
 
-            <div className="field" style={{ maxWidth: 480 }}>
+            <div className="field" style={{ maxWidth: 440, marginTop: 14 }}>
               <label>Website URL</label>
               <input
                 className="input"
                 type="url"
-                placeholder="https://yourwebsite.com"
+                placeholder="https://example.com"
                 value={newUrl}
                 onChange={e => setNewUrl(e.target.value)}
                 disabled={scraping}
               />
             </div>
 
-            <div className="field" style={{ maxWidth: 480 }}>
-              <label>MongoDB Connection URI <span style={{ fontWeight: 400, color: 'var(--text2)' }}>(optional)</span></label>
+            <div className="field" style={{ maxWidth: 440 }}>
+              <label>Lead Storage Database URI (Optional)</label>
               <input
                 className="input mono"
                 type="password"
-                placeholder="Leave blank to keep the existing lead-capture URI"
+                placeholder="Leave blank to keep existing database"
                 value={mongoUri}
                 onChange={e => setMongoUri(e.target.value)}
                 disabled={scraping}
               />
-              <p className="field-hint">Re-scraping keeps whatever URI is already saved for this site. Only fill this in if you want to change it.</p>
             </div>
 
             {scrapeError && (
-              <div className="error-box" style={{ maxWidth: 480, marginBottom: 12 }}>
-                ⚠️ {scrapeError.includes('Network Error') ? 'Local scraper worker not detected on http://localhost:5000. Run the command above first.' : scrapeError}
+              <div className="error-box" style={{ maxWidth: 440, marginBottom: 10 }}>
+                {scrapeError}
               </div>
             )}
 
             {scrapeResult && (
-              <div className="success-box" style={{ maxWidth: 480, marginBottom: 12 }}>
-                ✅ Done — {scrapeResult.pagesScraped} pages, {scrapeResult.chunksStored} chunks stored.
+              <div className="success-box" style={{ maxWidth: 440, marginBottom: 10 }}>
+                Indexed {scrapeResult.pagesScraped} pages, {scrapeResult.chunksStored} content chunks.
               </div>
             )}
 
@@ -360,8 +319,9 @@ export default function ManageSite() {
               className="btn btn-primary"
               onClick={handleRescrape}
               disabled={scraping}
+              style={{ marginTop: 6 }}
             >
-              {scraping ? <><span className="spinner" /> Scraping…</> : '🔄 Start Re-scrape'}
+              {scraping ? <><span className="spinner" /> Crawling...</> : 'Start Crawl'}
             </button>
           </div>
         )}

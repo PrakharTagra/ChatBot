@@ -1,58 +1,61 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
   Send,
-  Sparkles,
-  Bot,
   User,
   ExternalLink,
   Clock,
   ShieldCheck,
   AlertTriangle,
   RotateCcw,
-  CheckCircle2,
+  Check,
   Copy,
-  Layers,
   ChevronDown,
   Globe,
   Database,
   Sliders,
-  Terminal,
-  Zap,
-  Activity
+  Settings2,
+  Save,
+  MessageSquare
 } from 'lucide-react'
-import { RENDER_API, ENTERPRISE_KNOWLEDGE_BASES, APP_NAME } from '../config'
+import { RENDER_API, getChatbotConfig, saveChatbotConfig, getScrapedSites } from '../config'
 import './Playground.css'
 
 export default function Playground() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const initialSiteId = searchParams.get('site') || 'd2itechnology'
+  const initialSiteId = searchParams.get('site') || ''
 
-  const [availableSites, setAvailableSites] = useState(ENTERPRISE_KNOWLEDGE_BASES)
-  const [selectedSiteId, setSelectedSiteId] = useState(initialSiteId)
-  const [selectedSite, setSelectedSite] = useState(
-    ENTERPRISE_KNOWLEDGE_BASES.find(s => s.websiteId === initialSiteId) || ENTERPRISE_KNOWLEDGE_BASES[0]
-  )
+  const [availableSites, setAvailableSites] = useState(() => getScrapedSites())
+  const [selectedSiteId, setSelectedSiteId] = useState(initialSiteId || availableSites[0]?.websiteId || '')
+  const [selectedSite, setSelectedSite] = useState(availableSites[0] || null)
+
+  // Chatbot configuration per website
+  const [botConfig, setBotConfig] = useState(() => getChatbotConfig(selectedSiteId))
+  const [isCustomizing, setIsCustomizing] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editColor, setEditColor] = useState('')
+  const [editLogo, setEditLogo] = useState('')
+  const [editWelcome, setEditWelcome] = useState('')
 
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [lastLatency, setLastLatency] = useState(null)
   const [copiedId, setCopiedId] = useState(null)
-  const [viewMode, setViewMode] = useState('studio') // 'studio' | 'widget'
 
   const chatEndRef = useRef(null)
   const historyRef = useRef([])
 
-  function resetConversation(site = selectedSite) {
+  function resetConversation(site = selectedSite, config = botConfig) {
     historyRef.current = []
     setLastLatency(null)
     setMessages([
       {
         id: 'init-msg',
         role: 'bot',
-        text: `👋 Greetings. I am the grounded autonomous assistant for **${site?.name || site?.websiteId}**. Every response is mathematically retrieved from your ChromaDB Cloud vector index and verified against zero-hallucination guardrails.`,
+        text: config?.welcomeMessage || `Hello. How can I help you with ${site?.name || site?.websiteId || 'this website'} today?`,
         confident: true,
         source: null,
         latency: null
@@ -60,55 +63,106 @@ export default function Playground() {
     ])
   }
 
-  // Fetch available sites from API and merge with enterprise presets
+  // Fetch available sites from API and merge with locally registered sites
   useEffect(() => {
     async function loadSites() {
       try {
-        const res = await axios.get(`${RENDER_API}/api/sites`, { timeout: 6000 })
-        if (res.data?.sites && res.data.sites.length > 0) {
-          const apiSites = res.data.sites.map(s => {
-            const match = ENTERPRISE_KNOWLEDGE_BASES.find(sc => sc.websiteId === s.websiteId)
-            return {
-              websiteId: s.websiteId,
-              name: match?.name || s.websiteId,
-              url: s.url || match?.url || `https://${s.websiteId}.com`,
-              chunks: s.chunks ?? match?.chunks ?? 0,
-              lastSync: s.lastScraped || match?.lastSync,
-              description: match?.description || 'Connected domain indexed into ChromaDB Cloud.',
-              sampleQuestions: match?.sampleQuestions || [
-                'What core services or capabilities are offered?',
-                'How do I schedule a technical call with your team?',
-                'Where can I review pricing and enterprise SLAs?',
-                'What compliance and security standards are supported?'
-              ]
-            }
-          })
+        const res = await axios.get(`${RENDER_API}/api/sites`, { timeout: 6000 }).catch(() => ({ data: { sites: [] } }))
+        const apiSites = (res.data?.sites || []).map(s => {
+          const cfg = getChatbotConfig(s.websiteId)
+          return {
+            websiteId: s.websiteId,
+            name: cfg.title || s.websiteId,
+            url: s.url || `https://${s.websiteId}.com`,
+            chunks: s.chunks ?? 0,
+            lastSync: s.lastScraped || null,
+            description: `Knowledge base for ${s.websiteId}`,
+            sampleQuestions: [
+              'What core services or products are offered?',
+              'How can I get in touch with your team?',
+              'Where can I find pricing details?',
+              'Where are you located?'
+            ]
+          }
+        })
 
-          const combined = [...apiSites]
-          ENTERPRISE_KNOWLEDGE_BASES.forEach(sc => {
-            if (!combined.some(c => c.websiteId === sc.websiteId)) {
-              combined.push(sc)
-            }
-          })
-          setAvailableSites(combined)
+        const localSites = getScrapedSites().map(s => ({
+          websiteId: s.websiteId,
+          name: s.name || s.websiteId,
+          url: s.url || `https://${s.websiteId}.com`,
+          chunks: s.chunks ?? 0,
+          lastSync: s.lastSync || null,
+          description: s.description || `Knowledge base for ${s.websiteId}`,
+          sampleQuestions: [
+            'What core services or products are offered?',
+            'How can I get in touch with your team?',
+            'Where can I find pricing details?',
+            'Where are you located?'
+          ]
+        }))
+
+        const map = new Map()
+        apiSites.forEach(s => map.set(s.websiteId, s))
+        localSites.forEach(s => {
+          if (!map.has(s.websiteId)) map.set(s.websiteId, s)
+        })
+
+        const combined = Array.from(map.values())
+        setAvailableSites(combined)
+
+        if (combined.length > 0) {
+          const target = initialSiteId && combined.some(s => s.websiteId === initialSiteId)
+            ? initialSiteId
+            : combined[0].websiteId
+          setSelectedSiteId(target)
         }
       } catch {
-        setAvailableSites(ENTERPRISE_KNOWLEDGE_BASES)
+        const localSites = getScrapedSites()
+        setAvailableSites(localSites)
+        if (localSites.length > 0) {
+          setSelectedSiteId(localSites[0].websiteId)
+        }
       }
     }
     loadSites()
-  }, [])
+  }, [initialSiteId])
 
+  // Switch site and load its custom chatbot branding
   useEffect(() => {
+    if (!availableSites || availableSites.length === 0) return
+
     const site = availableSites.find(s => s.websiteId === selectedSiteId) || availableSites[0]
+    if (!site) return
+
     setSelectedSite(site)
-    resetConversation(site)
+
+    const cfg = getChatbotConfig(site.websiteId, site)
+    setBotConfig(cfg)
+    setEditTitle(cfg.title)
+    setEditColor(cfg.primaryColor || '#0f172a')
+    setEditLogo(cfg.logoUrl || '')
+    setEditWelcome(cfg.welcomeMessage)
+
+    resetConversation(site, cfg)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSiteId, availableSites])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  function handleSaveCustomization() {
+    const updated = {
+      title: editTitle.trim() || `${selectedSite.name} Assistant`,
+      primaryColor: editColor || '#0f172a',
+      logoUrl: editLogo.trim(),
+      welcomeMessage: editWelcome.trim() || `Hello. How can I assist you with ${selectedSite.name}?`
+    }
+    setBotConfig(updated)
+    saveChatbotConfig(selectedSite.websiteId, updated)
+    setIsCustomizing(false)
+    resetConversation(selectedSite, updated)
+  }
 
   async function handleSend(promptText = null) {
     const textToSend = typeof promptText === 'string' ? promptText : input.trim()
@@ -170,7 +224,7 @@ export default function Playground() {
       const errorMsg = {
         id: 'err-' + Date.now(),
         role: 'bot',
-        text: '❌ Inference pipeline error: ' + (err.response?.data?.error || err.message),
+        text: 'Error connecting to service. ' + (err.response?.data?.error || err.message),
         confident: false,
         latency: elapsed
       }
@@ -186,15 +240,35 @@ export default function Playground() {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  if (availableSites.length === 0) {
+    return (
+      <div className="playground-container fade-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div className="card" style={{ maxWidth: 460, textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <MessageSquare size={22} style={{ color: 'var(--text-muted)' }} />
+          </div>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
+            No Indexed Websites Found
+          </h3>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
+            To test a chatbot, first crawl and index a website using the local scraper. Once completed, your custom chatbot and live testing sandbox will appear here.
+          </p>
+          <button className="btn btn-primary" onClick={() => navigate('/register')}>
+            <Globe size={14} /> Index Your First Website
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const primaryColor = botConfig.primaryColor || '#0f172a'
+
   return (
     <div className="playground-container fade-in">
-      {/* Studio Control Header */}
+      {/* Target Selector & Settings Bar */}
       <div className="playground-header-card card">
         <div className="site-select-group">
-          <div className="site-select-label">
-            <Database size={15} className="text-accent" />
-            <span>Target Knowledge Base:</span>
-          </div>
+          <label className="select-label">Selected Website</label>
           <div className="custom-select-wrapper">
             <select
               value={selectedSiteId}
@@ -206,7 +280,7 @@ export default function Playground() {
             >
               {availableSites.map(s => (
                 <option key={s.websiteId} value={s.websiteId}>
-                  {s.name} ({s.websiteId}) — {s.chunks} chunks
+                  {s.name} ({s.chunks} chunks)
                 </option>
               ))}
             </select>
@@ -215,64 +289,143 @@ export default function Playground() {
         </div>
 
         <div className="site-meta-badges">
-          <span className="badge badge-purple mono">
-            <Layers size={13} /> {selectedSite.chunks} Vector Chunks
-          </span>
-          <span className="badge badge-teal mono">
-            <Zap size={12} /> Groq LPU Engine
-          </span>
+          <button
+            className={`btn btn-sm ${isCustomizing ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setIsCustomizing(!isCustomizing)}
+          >
+            <Settings2 size={13} />
+            <span>Customize Chatbot</span>
+          </button>
+
           <a
             href={selectedSite.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="badge badge-ghost site-link-badge"
+            className="btn btn-ghost btn-sm"
           >
-            <Globe size={13} /> Domain <ExternalLink size={11} />
+            <Globe size={13} />
+            <span className="btn-label-desktop">Visit Site</span>
+            <ExternalLink size={10} />
           </a>
+
           <button
-            className="btn btn-ghost btn-sm reset-btn"
+            className="btn btn-ghost btn-sm"
             onClick={() => resetConversation()}
             title="Reset conversation"
           >
-            <RotateCcw size={13} /> Reset Session
+            <RotateCcw size={12} />
+            <span>Reset</span>
           </button>
         </div>
       </div>
 
-      {/* Main Studio Arena */}
-      <div className="playground-main-grid">
-        {/* Left: Chat Session Arena */}
-        <div className="chat-arena card">
-          <div className="arena-header">
-            <div className="arena-status">
-              <span className="live-dot" />
-              <div>
-                <strong>{selectedSite.name}</strong>
-                <small>Model: Llama 3.1 8B Instant · Vector Space: Chroma Cloud</small>
+      {/* Chatbot Customizer Panel */}
+      {isCustomizing && (
+        <div className="bot-customizer-card card fade-in">
+          <div className="customizer-header">
+            <h4>Customize Chatbot for {selectedSite.name}</h4>
+            <span className="customizer-sub">Changes apply immediately to this website's chatbot widget.</span>
+          </div>
+
+          <div className="customizer-grid">
+            <div className="field">
+              <label>Chatbot Title</label>
+              <input
+                type="text"
+                className="input"
+                value={editTitle}
+                onChange={e => setEditTitle(e.target.value)}
+                placeholder="e.g. Acme Assistant"
+              />
+            </div>
+
+            <div className="field">
+              <label>Theme Color</label>
+              <div className="color-input-wrap">
+                <input
+                  type="color"
+                  className="color-picker-input"
+                  value={editColor}
+                  onChange={e => setEditColor(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="input mono"
+                  value={editColor}
+                  onChange={e => setEditColor(e.target.value)}
+                  placeholder="#0f172a"
+                />
               </div>
             </div>
 
-            <div className="arena-controls">
-              <button
-                className={`mode-toggle-btn ${viewMode === 'studio' ? 'active' : ''}`}
-                onClick={() => setViewMode('studio')}
-              >
-                Console View
-              </button>
-              <button
-                className={`mode-toggle-btn ${viewMode === 'widget' ? 'active' : ''}`}
-                onClick={() => setViewMode('widget')}
-              >
-                Widget Simulation
-              </button>
+            <div className="field">
+              <label>Logo URL (Optional)</label>
+              <input
+                type="url"
+                className="input"
+                value={editLogo}
+                onChange={e => setEditLogo(e.target.value)}
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
+
+            <div className="field full-width">
+              <label>Welcome Message</label>
+              <input
+                type="text"
+                className="input"
+                value={editWelcome}
+                onChange={e => setEditWelcome(e.target.value)}
+                placeholder="Initial greeting shown to visitors"
+              />
             </div>
           </div>
 
-          {/* Quick Prompts Bar */}
+          <div className="customizer-actions">
+            <button className="btn btn-primary btn-sm" onClick={handleSaveCustomization}>
+              <Save size={13} /> Save Chatbot Branding
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setIsCustomizing(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid: Custom Chatbot Display + Telemetry */}
+      <div className="playground-main-grid">
+        {/* Customized Chatbot Container */}
+        <div className="chat-arena card">
+          {/* Branded Chatbot Header */}
+          <div className="arena-header" style={{ borderTop: `3px solid ${primaryColor}` }}>
+            <div className="arena-brand-info">
+              {botConfig.logoUrl ? (
+                <img
+                  src={botConfig.logoUrl}
+                  alt=""
+                  className="bot-header-logo"
+                  onError={e => { e.target.style.display = 'none' }}
+                />
+              ) : (
+                <div className="bot-header-avatar" style={{ backgroundColor: primaryColor }}>
+                  <MessageSquare size={14} color="#ffffff" />
+                </div>
+              )}
+              <div>
+                <strong className="bot-header-title">{botConfig.title || selectedSite.name}</strong>
+                <span className="bot-header-subtitle">{selectedSite.name} Support</span>
+              </div>
+            </div>
+
+            <div className="header-status-pill">
+              <span className="live-dot" />
+              <span>Online</span>
+            </div>
+          </div>
+
+          {/* Quick Questions Bar */}
           <div className="quick-prompts-bar">
-            <span className="prompts-label">
-              <Sparkles size={13} className="text-warn" /> Inquiries:
-            </span>
+            <span className="prompts-label">Questions:</span>
             <div className="prompts-scroll">
               {(selectedSite.sampleQuestions || []).map((q, idx) => (
                 <button
@@ -287,43 +440,51 @@ export default function Playground() {
             </div>
           </div>
 
-          {/* Messages Area */}
-          <div className={`playground-messages ${viewMode === 'widget' ? 'widget-style' : ''}`}>
+          {/* Message Stream */}
+          <div className="playground-messages">
             {messages.map(m => (
               <div key={m.id} className={`p-msg p-msg--${m.role}`}>
                 <div className="msg-avatar">
-                  {m.role === 'bot' ? <Bot size={16} /> : <User size={16} />}
+                  {m.role === 'bot' ? (
+                    botConfig.logoUrl ? (
+                      <img src={botConfig.logoUrl} alt="" className="msg-logo-img" onError={e => { e.target.style.display = 'none' }} />
+                    ) : (
+                      <div className="msg-bot-dot" style={{ backgroundColor: primaryColor }} />
+                    )
+                  ) : (
+                    <User size={13} />
+                  )}
                 </div>
 
                 <div className="msg-bubble-wrap">
-                  <div className="msg-bubble">
+                  <div
+                    className="msg-bubble"
+                    style={m.role === 'user' ? { backgroundColor: primaryColor, color: '#ffffff' } : {}}
+                  >
                     <p className="msg-text">{m.text}</p>
 
-                    {/* Source Citation Anchor Link */}
                     {m.source && (
                       <div className="source-citation">
-                        <span className="citation-title">Grounded Citation:</span>
+                        <span className="citation-title">Source:</span>
                         <a
                           href={m.source}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="citation-link"
                         >
-                          <ExternalLink size={12} /> {m.sourceLabel || m.source}
+                          <ExternalLink size={10} /> {m.sourceLabel || m.source}
                         </a>
                       </div>
                     )}
 
-                    {/* Low Confidence Trigger / Sentinel */}
                     {m.confident === false && (
                       <div className="low-confidence-notice">
-                        <AlertTriangle size={14} />
-                        <span>Confidence below threshold — Lead capture sentinel triggered</span>
+                        <AlertTriangle size={12} />
+                        <span>Content not found in index. Support contact requested.</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Message Meta Info */}
                   <div className="msg-meta">
                     {m.latency && (
                       <span className="latency-tag">
@@ -332,15 +493,7 @@ export default function Playground() {
                     )}
                     {m.confident !== undefined && (
                       <span className={`confidence-tag ${m.confident ? 'high' : 'low'}`}>
-                        {m.confident ? (
-                          <>
-                            <ShieldCheck size={11} /> Grounded
-                          </>
-                        ) : (
-                          <>
-                            <AlertTriangle size={11} /> Fallback
-                          </>
-                        )}
+                        {m.confident ? 'Verified' : 'Fallback'}
                       </span>
                     )}
                     <button
@@ -348,7 +501,7 @@ export default function Playground() {
                       onClick={() => copyText(m.id, m.text)}
                       title="Copy response"
                     >
-                      {copiedId === m.id ? <CheckCircle2 size={12} className="text-success" /> : <Copy size={12} />}
+                      {copiedId === m.id ? <Check size={11} className="text-success" /> : <Copy size={11} />}
                     </button>
                   </div>
                 </div>
@@ -358,7 +511,7 @@ export default function Playground() {
             {loading && (
               <div className="p-msg p-msg--bot">
                 <div className="msg-avatar">
-                  <Bot size={16} />
+                  <div className="msg-bot-dot" style={{ backgroundColor: primaryColor }} />
                 </div>
                 <div className="msg-bubble-wrap">
                   <div className="msg-bubble typing-bubble">
@@ -367,9 +520,7 @@ export default function Playground() {
                     <span className="dot" />
                   </div>
                   <div className="msg-meta">
-                    <span className="latency-tag">
-                      <Clock size={11} /> Computing vector similarity + Groq inference...
-                    </span>
+                    <span className="latency-tag">Retrieving content...</span>
                   </div>
                 </div>
               </div>
@@ -377,12 +528,12 @@ export default function Playground() {
             <div ref={chatEndRef} />
           </div>
 
-          {/* Input Bar */}
+          {/* Chat Input */}
           <div className="playground-input-row">
             <input
               type="text"
               className="playground-input"
-              placeholder={`Send inquiry to ${selectedSite.name}... (e.g., pricing, technical capabilities)`}
+              placeholder={`Ask ${botConfig.title || selectedSite.name}...`}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
@@ -390,71 +541,58 @@ export default function Playground() {
             />
             <button
               className="btn btn-primary send-btn"
+              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
               onClick={() => handleSend()}
               disabled={loading || !input.trim()}
             >
-              <Send size={15} />
-              <span>Query Agent</span>
+              <Send size={13} />
+              <span>Send</span>
             </button>
           </div>
         </div>
 
-        {/* Right: RAG Telemetry & Model Specs */}
+        {/* Right: Technical Inspector */}
         <div className="telemetry-sidebar card">
-          <h3 className="telemetry-title">
-            <Activity size={16} className="text-teal" /> Real-Time Telemetry
-          </h3>
+          <h3 className="telemetry-title">System Status</h3>
 
           <div className="telemetry-metric-group">
             <div className="telemetry-box">
-              <span className="tel-label">Roundtrip Latency</span>
-              <span className="tel-val highlight-val">
-                {lastLatency !== null ? `${lastLatency} ms` : 'Standby'}
+              <span className="tel-label">Latency</span>
+              <span className="tel-val">
+                {lastLatency !== null ? `${lastLatency} ms` : '—'}
               </span>
-              <small className="tel-sub">Groq LPU Hardware Acceleration</small>
+              <span className="tel-sub">Real-time search</span>
             </div>
 
             <div className="telemetry-box">
               <span className="tel-label">Vector Space</span>
               <span className="tel-val">Cosine Distance</span>
-              <small className="tel-sub">Top 6 Chunks · Inclusion ≥ 0.35</small>
+              <span className="tel-sub">Top 6 chunks retrieved</span>
             </div>
           </div>
 
           <div className="divider" />
 
-          <h4 className="inspector-heading">Active Guardrails</h4>
-          <ul className="spec-list">
-            <li>
-              <CheckCircle2 size={13} className="text-success" />
-              <span><strong>Zero-Shot Grounding:</strong> Model answers strictly using retrieved chunks.</span>
-            </li>
-            <li>
-              <CheckCircle2 size={13} className="text-success" />
-              <span><strong>Anti-Hallucination Sentinel:</strong> NOT_IN_CONTEXT parsed server-side.</span>
-            </li>
-            <li>
-              <CheckCircle2 size={13} className="text-success" />
-              <span><strong>Heading Anchors:</strong> Automated deep-linking to exact source sections.</span>
-            </li>
-            <li>
-              <CheckCircle2 size={13} className="text-success" />
-              <span><strong>Multi-Tenant Isolation:</strong> Dedicated Chroma Cloud collection.</span>
-            </li>
-          </ul>
+          <h4 className="inspector-heading">Active Chatbot Theme</h4>
+          <div className="theme-summary-box">
+            <div className="theme-summary-row">
+              <span className="ts-label">Brand Color:</span>
+              <div className="ts-color-indicator">
+                <span className="color-preview" style={{ backgroundColor: primaryColor }} />
+                <span className="ts-val mono">{primaryColor}</span>
+              </div>
+            </div>
+            <div className="theme-summary-row">
+              <span className="ts-label">Title:</span>
+              <span className="ts-val">{botConfig.title}</span>
+            </div>
+          </div>
 
           <div className="divider" />
 
           <div className="site-summary-box">
-            <div className="summary-header">
-              <Globe size={14} className="text-accent" />
-              <strong>{selectedSite.name}</strong>
-            </div>
+            <strong className="summary-name">{selectedSite.name}</strong>
             <p className="summary-desc">{selectedSite.description}</p>
-            <div className="summary-chips">
-              <span className="badge badge-purple">{selectedSite.websiteId}</span>
-              <span className="badge badge-green">{selectedSite.chunks} chunks</span>
-            </div>
           </div>
         </div>
       </div>

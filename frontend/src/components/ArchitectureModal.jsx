@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, Server, Database, Cpu, Globe, ArrowRight, ShieldCheck, Zap, Lock, Activity } from 'lucide-react'
+import { X, Server, Database, Globe, ArrowRight, ShieldCheck } from 'lucide-react'
 import { APP_NAME } from '../config'
 import './ArchitectureModal.css'
 
@@ -11,21 +11,21 @@ export default function ArchitectureModal({ isOpen, onClose }) {
       <div className="modal-container fade-in" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-wrap">
-            <span className="badge badge-teal">Architecture & Security Specification</span>
-            <h2>{APP_NAME} Enterprise RAG System Architecture</h2>
+            <span className="badge badge-purple">System Architecture</span>
+            <h2>{APP_NAME} Architecture & Data Flow</h2>
           </div>
-          <button className="modal-close-btn" onClick={onClose}>
-            <X size={20} />
+          <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+            <X size={18} />
           </button>
         </div>
 
         <div className="modal-body">
           <div className="arch-notice">
-            <ShieldCheck size={22} className="text-success" style={{ flexShrink: 0 }} />
+            <ShieldCheck size={20} className="text-success" style={{ flexShrink: 0 }} />
             <div>
-              <strong>Decoupled Ingestion & Serving Isolation (Enterprise Standard)</strong>
+              <strong>Decoupled Ingestion & Serving Design</strong>
               <p>
-                To maintain sub-300ms SLA response times and eliminate out-of-memory bottlenecks, {APP_NAME} completely separates the <strong>Heavy Ingestion Worker (Playwright/Crawlee)</strong> from the <strong>Real-Time Serving API (Render + Groq)</strong>. Vector embeddings are stored in isolated per-tenant collections inside ChromaDB Cloud.
+                To maintain sub-300ms response times and prevent memory contention, {APP_NAME} isolates the background crawler worker from the live serving API. Vector documents are stored in dedicated collections in Chroma Cloud.
               </p>
             </div>
           </div>
@@ -33,66 +33,66 @@ export default function ArchitectureModal({ isOpen, onClose }) {
           <div className="diagram-grid">
             <div className="diagram-card">
               <div className="diagram-card-header">
-                <Globe size={16} className="text-accent" />
-                <span>1. Ingestion & Extraction</span>
+                <Globe size={14} />
+                <span>1. Crawler Ingestion</span>
               </div>
               <div className="diagram-card-body">
-                <div className="node">Target Customer Domain</div>
+                <div className="node">Customer Website</div>
                 <div className="arrow-down">↓</div>
                 <div className="node highlight">
                   <strong>Playwright Crawler</strong>
-                  <small>Crawlee Engine · Single Concurrency</small>
+                  <small>Crawlee · Single Concurrency</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node">
-                  <strong>Semantic Chunking</strong>
-                  <small>~150 words + 30-word overlap</small>
+                  <strong>Content Extraction</strong>
+                  <small>~150 words with 30-word overlap</small>
                 </div>
               </div>
             </div>
 
             <div className="diagram-card">
               <div className="diagram-card-header">
-                <Database size={16} className="text-teal" />
-                <span>2. High-Dimensional Vectors</span>
+                <Database size={14} />
+                <span>2. Vector Database</span>
               </div>
               <div className="diagram-card-body">
                 <div className="node highlight">
-                  <strong>Transformers.js</strong>
-                  <small>all-MiniLM-L6-v2 Local Embeddings</small>
+                  <strong>Embedding Model</strong>
+                  <small>all-MiniLM-L6-v2 Vectors</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node highlight-chroma">
                   <strong>ChromaDB Cloud</strong>
-                  <small>Cosine Similarity · Top 6 Chunks</small>
+                  <small>Cosine Similarity Search</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node">
-                  <strong>Multi-Tenant Boundary</strong>
-                  <small>Dedicated Isolated Collections</small>
+                  <strong>Collection Isolation</strong>
+                  <small>Dedicated per-site namespace</small>
                 </div>
               </div>
             </div>
 
             <div className="diagram-card">
               <div className="diagram-card-header">
-                <Zap size={16} className="text-yellow" />
-                <span>3. Serving & Guardrails</span>
+                <Server size={14} />
+                <span>3. Live Serving API</span>
               </div>
               <div className="diagram-card-body">
                 <div className="node">
-                  <strong>Serving API (Render)</strong>
-                  <small>Stateless Express · Sub-300ms SLA</small>
+                  <strong>Express Web Service</strong>
+                  <small>Render Deployment (&lt;300ms)</small>
                 </div>
                 <div className="arrow-down">↓</div>
-                <div className="node highlight-groq">
-                  <strong>Groq (Llama 3.1 8B)</strong>
-                  <small>Strict Grounding · Sentinel Check</small>
+                <div className="node highlight-service">
+                  <strong>Context Matcher</strong>
+                  <small>Strict Verified Context</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node">
-                  <strong>Isolated Lead Routing</strong>
-                  <small>Customer MongoDB Instance</small>
+                  <strong>Customer Lead Storage</strong>
+                  <small>Independent MongoDB Target</small>
                 </div>
               </div>
             </div>
@@ -100,20 +100,20 @@ export default function ArchitectureModal({ isOpen, onClose }) {
 
           <div className="pipeline-highlights">
             <div className="highlight-item">
-              <strong>🔒 Zero-Hallucination Guardrail:</strong> If semantic chunk similarity falls below threshold, the inference engine returns an exact NOT_IN_CONTEXT sentinel parsed server-side, gracefully triggering lead capture rather than guessing.
+              <strong>Verified Content Matching:</strong> If search similarity falls below threshold, the service safely falls back and offers contact options rather than generating unverified claims.
             </div>
             <div className="highlight-item">
-              <strong>⚡ Hardware-Accelerated Inference:</strong> Groq LPUs provide deterministic token generation speeds up to 10x faster than traditional GPU clusters.
+              <strong>Heading Deep-Links:</strong> Every response automatically includes direct links to relevant HTML section anchors on the original site.
             </div>
             <div className="highlight-item">
-              <strong>📦 Universal Zero-Dependency Embed:</strong> The customer-facing chat widget bundles into a lightweight vanilla JS script, embeddable on any CMS, Shopify, Next.js, or plain HTML site in 1 line.
+              <strong>Lightweight Widget:</strong> Embeds anywhere with a single script tag without heavy front-end framework dependencies.
             </div>
           </div>
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-primary" onClick={onClose}>
-            Close Architecture Inspector
+          <button className="btn btn-primary btn-sm" onClick={onClose}>
+            Close
           </button>
         </div>
       </div>
