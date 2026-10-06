@@ -91,7 +91,7 @@ export default function ManageSite() {
     } catch (e) {
       let msg = e.response?.data?.error || e.message
       if (msg.includes('Network Error')) {
-        msg = 'Crawler worker not detected on http://localhost:5000. Run "cd backend/local-scraper && npm run dev" first.'
+        msg = 'Crawler worker not detected on http://127.0.0.1:5000. Run "cd backend/local-scraper && npm run dev" first.'
       }
       setScrapeError(msg)
     } finally {

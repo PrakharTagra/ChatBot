@@ -9,15 +9,15 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
-const SIMILARITY_THRESHOLD = 0.32;
-const CONTEXT_INCLUSION_THRESHOLD = 0.35;
+const SIMILARITY_THRESHOLD = 0.22;
+const CONTEXT_INCLUSION_THRESHOLD = 0.20;
 const TOP_K = 6;
 const NOT_FOUND_TOKEN = "NOT_IN_CONTEXT";
 
 const GREETING_RE = /^(hi+|hello+|hey+|howdy|greetings|good\s+(morning|afternoon|evening|day)|what'?s\s+up|sup|yo|hiya|namaste|salut|hola)\b/i;
 const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you|ok|okay|sure|great|cool|awesome|bye|goodbye|see you|cheers)\b/i;
 
-const CONTACT_INTENT_RE = /\b(contact( (you|us|someone|me))?|get in touch|reach (you|out)|talk to (someone|a human|a person|a representative|your team)|speak (to|with) (someone|a human|a person)|connect (me |us )?(with |to )?(you|your team|someone|the team)|call (me|back)|phone number|email address|customer support|sales team|book a call|schedule a call)\b/i;
+const HUMAN_HANDOFF_RE = /\b(talk to (a human|a person|a representative|someone from the team|sales)|speak (to|with) (a human|a person|a representative)|call me back|request a call|book a call|schedule a consultation|schedule a call)\b/i;
 
 const LINK_REQUEST_RE = /\b(link|url|web ?page|source|page (link|url)|where can i (read|see|find)|send (me )?the link|share the link|give me the link)\b/i;
 
@@ -39,7 +39,7 @@ router.post("/", async (req, res) => {
     });
   }
 
-  if (CONTACT_INTENT_RE.test(trimmed)) {
+  if (HUMAN_HANDOFF_RE.test(trimmed)) {
     return res.json({
       answer: `I'd be happy to connect you with someone from the ${siteName} team. Let me grab a few quick details.`,
       source: null,
