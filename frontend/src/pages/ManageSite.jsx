@@ -108,16 +108,16 @@ export default function ManageSite() {
     }
   }
 
-  const embedSnippet = `<!-- ChatAgent Widget -->
+  const embedSnippet = `<!-- CogniSite AI Autonomous Widget -->
 <script src="${RENDER_API}/widget/chat-widget.js" defer></script>
 <script defer>
   document.addEventListener("DOMContentLoaded", function() {
     ChatWidget.init({
       websiteId: "${websiteId}",
       apiUrl: "${RENDER_API}",
-      title: "Website Assistant",
-      welcomeMessage: "👋 Hi! I can answer questions about this website. What would you like to know?",
-      primaryColor: "#6c63ff"
+      title: "Knowledge Assistant",
+      welcomeMessage: "👋 Welcome! How may I assist you with information regarding ${websiteId}?",
+      primaryColor: "#6366f1"
     });
   });
 </script>`
@@ -131,18 +131,17 @@ export default function ManageSite() {
   return (
     <div className="manage-page fade-in">
       <div className="manage-header">
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Back</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Fleet Overview</button>
         <div>
-          <h2 className="manage-title">Managing: <span className="mono accent">{websiteId}</span></h2>
+          <h2 className="manage-title">Knowledge Base: <span className="mono accent">{websiteId}</span></h2>
         </div>
       </div>
 
-      {}
       <div className="tabs">
         {[
-          { id: 'embed', label: '📋 Embed Code' },
-          { id: 'test', label: '💬 Live Test' },
-          { id: 'rescrape', label: '🔄 Re-scrape' },
+          { id: 'embed', label: '📋 CDN Embed Code' },
+          { id: 'test', label: '💬 Agent Studio' },
+          { id: 'rescrape', label: '🔄 Ingestion Re-Sync' },
         ].map(t => (
           <button
             key={t.id}
@@ -296,8 +295,8 @@ export default function ManageSite() {
             </div>
 
             <div style={{
-              background: 'rgba(108, 99, 255, 0.08)',
-              border: '1px solid rgba(108, 99, 255, 0.25)',
+              background: 'rgba(6, 182, 212, 0.08)',
+              border: '1px solid rgba(6, 182, 212, 0.25)',
               borderRadius: 8,
               padding: 14,
               fontSize: 13,
@@ -306,10 +305,9 @@ export default function ManageSite() {
               maxWidth: 560
             }}>
               <strong style={{ color: 'var(--accent3)', display: 'block', marginBottom: 4 }}>
-                ℹ️ Production Ingestion Architecture Note:
+                🛡️ Enterprise Ingestion Agent Protocol:
               </strong>
-              Web crawling runs via the offline headless worker (<code>local-scraper</code>) using Playwright to bypass free-tier memory caps.
-              Ensure your local scraper is running before triggering:
+              Dynamic crawling is managed by your decoupled worker agent (Playwright/Crawlee) to ensure firewalled JS rendering without overloading real-time chat APIs. Verify your ingestion worker is active:
               <pre style={{
                 background: 'var(--bg)',
                 padding: '8px 12px',

@@ -17,19 +17,22 @@ import {
   ChevronDown,
   Globe,
   Database,
-  MessageSquare
+  Sliders,
+  Terminal,
+  Zap,
+  Activity
 } from 'lucide-react'
-import { RENDER_API, SHOWCASE_SITES } from '../config'
+import { RENDER_API, ENTERPRISE_KNOWLEDGE_BASES, APP_NAME } from '../config'
 import './Playground.css'
 
 export default function Playground() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialSiteId = searchParams.get('site') || 'd2itechnology'
 
-  const [availableSites, setAvailableSites] = useState(SHOWCASE_SITES)
+  const [availableSites, setAvailableSites] = useState(ENTERPRISE_KNOWLEDGE_BASES)
   const [selectedSiteId, setSelectedSiteId] = useState(initialSiteId)
   const [selectedSite, setSelectedSite] = useState(
-    SHOWCASE_SITES.find(s => s.websiteId === initialSiteId) || SHOWCASE_SITES[0]
+    ENTERPRISE_KNOWLEDGE_BASES.find(s => s.websiteId === initialSiteId) || ENTERPRISE_KNOWLEDGE_BASES[0]
   )
 
   const [messages, setMessages] = useState([])
@@ -49,7 +52,7 @@ export default function Playground() {
       {
         id: 'init-msg',
         role: 'bot',
-        text: `👋 Hello! I am the grounded AI Assistant for **${site?.name || site?.websiteId}**. I strictly answer questions using content indexed into ChromaDB Cloud. Ask me anything or click a sample question below!`,
+        text: `👋 Greetings. I am the grounded autonomous assistant for **${site?.name || site?.websiteId}**. Every response is mathematically retrieved from your ChromaDB Cloud vector index and verified against zero-hallucination guardrails.`,
         confident: true,
         source: null,
         latency: null
@@ -57,33 +60,32 @@ export default function Playground() {
     ])
   }
 
-  // Fetch available sites from API and merge with showcase
+  // Fetch available sites from API and merge with enterprise presets
   useEffect(() => {
     async function loadSites() {
       try {
         const res = await axios.get(`${RENDER_API}/api/sites`, { timeout: 6000 })
         if (res.data?.sites && res.data.sites.length > 0) {
           const apiSites = res.data.sites.map(s => {
-            const showcaseMatch = SHOWCASE_SITES.find(sc => sc.websiteId === s.websiteId)
+            const match = ENTERPRISE_KNOWLEDGE_BASES.find(sc => sc.websiteId === s.websiteId)
             return {
               websiteId: s.websiteId,
-              name: showcaseMatch?.name || s.websiteId,
-              url: s.url || showcaseMatch?.url || `https://${s.websiteId}.com`,
-              chunks: s.chunks ?? showcaseMatch?.chunks ?? 0,
-              lastScraped: s.lastScraped || showcaseMatch?.lastScraped,
-              description: showcaseMatch?.description || 'Indexed website knowledge base',
-              sampleQuestions: showcaseMatch?.sampleQuestions || [
-                'What is this website about?',
-                'What products or services are offered?',
-                'How can I get in touch?',
-                'Where are you located?'
+              name: match?.name || s.websiteId,
+              url: s.url || match?.url || `https://${s.websiteId}.com`,
+              chunks: s.chunks ?? match?.chunks ?? 0,
+              lastSync: s.lastScraped || match?.lastSync,
+              description: match?.description || 'Connected domain indexed into ChromaDB Cloud.',
+              sampleQuestions: match?.sampleQuestions || [
+                'What core services or capabilities are offered?',
+                'How do I schedule a technical call with your team?',
+                'Where can I review pricing and enterprise SLAs?',
+                'What compliance and security standards are supported?'
               ]
             }
           })
 
-          // Add any showcase sites not yet returned by API
           const combined = [...apiSites]
-          SHOWCASE_SITES.forEach(sc => {
+          ENTERPRISE_KNOWLEDGE_BASES.forEach(sc => {
             if (!combined.some(c => c.websiteId === sc.websiteId)) {
               combined.push(sc)
             }
@@ -91,14 +93,12 @@ export default function Playground() {
           setAvailableSites(combined)
         }
       } catch {
-        // Fallback gracefully to SHOWCASE_SITES
-        setAvailableSites(SHOWCASE_SITES)
+        setAvailableSites(ENTERPRISE_KNOWLEDGE_BASES)
       }
     }
     loadSites()
   }, [])
 
-  // Update selected site when dropdown or URL params change
   useEffect(() => {
     const site = availableSites.find(s => s.websiteId === selectedSiteId) || availableSites[0]
     setSelectedSite(site)
@@ -170,7 +170,7 @@ export default function Playground() {
       const errorMsg = {
         id: 'err-' + Date.now(),
         role: 'bot',
-        text: '❌ Could not retrieve answer from Render API. ' + (err.response?.data?.error || err.message),
+        text: '❌ Inference pipeline error: ' + (err.response?.data?.error || err.message),
         confident: false,
         latency: elapsed
       }
@@ -188,11 +188,11 @@ export default function Playground() {
 
   return (
     <div className="playground-container fade-in">
-      {/* Top Header / Site Switcher Bar */}
+      {/* Studio Control Header */}
       <div className="playground-header-card card">
         <div className="site-select-group">
           <div className="site-select-label">
-            <Database size={16} className="text-teal" />
+            <Database size={15} className="text-accent" />
             <span>Target Knowledge Base:</span>
           </div>
           <div className="custom-select-wrapper">
@@ -218,34 +218,37 @@ export default function Playground() {
           <span className="badge badge-purple mono">
             <Layers size={13} /> {selectedSite.chunks} Vector Chunks
           </span>
+          <span className="badge badge-teal mono">
+            <Zap size={12} /> Groq LPU Engine
+          </span>
           <a
             href={selectedSite.url}
             target="_blank"
             rel="noopener noreferrer"
             className="badge badge-ghost site-link-badge"
           >
-            <Globe size={13} /> Visit Site <ExternalLink size={11} />
+            <Globe size={13} /> Domain <ExternalLink size={11} />
           </a>
           <button
             className="btn btn-ghost btn-sm reset-btn"
             onClick={() => resetConversation()}
             title="Reset conversation"
           >
-            <RotateCcw size={14} /> Clear Chat
+            <RotateCcw size={13} /> Reset Session
           </button>
         </div>
       </div>
 
-      {/* Main Grid: Chat Arena + Telemetry Inspector */}
+      {/* Main Studio Arena */}
       <div className="playground-main-grid">
-        {/* Left / Center: Interactive Chat Arena */}
+        {/* Left: Chat Session Arena */}
         <div className="chat-arena card">
           <div className="arena-header">
             <div className="arena-status">
               <span className="live-dot" />
               <div>
                 <strong>{selectedSite.name}</strong>
-                <small>Groq Llama 3.1 8B Instant · ChromaDB Cloud</small>
+                <small>Model: Llama 3.1 8B Instant · Vector Space: Chroma Cloud</small>
               </div>
             </div>
 
@@ -254,7 +257,7 @@ export default function Playground() {
                 className={`mode-toggle-btn ${viewMode === 'studio' ? 'active' : ''}`}
                 onClick={() => setViewMode('studio')}
               >
-                Studio View
+                Console View
               </button>
               <button
                 className={`mode-toggle-btn ${viewMode === 'widget' ? 'active' : ''}`}
@@ -268,7 +271,7 @@ export default function Playground() {
           {/* Quick Prompts Bar */}
           <div className="quick-prompts-bar">
             <span className="prompts-label">
-              <Sparkles size={13} className="text-warn" /> Quick Prompts:
+              <Sparkles size={13} className="text-warn" /> Inquiries:
             </span>
             <div className="prompts-scroll">
               {(selectedSite.sampleQuestions || []).map((q, idx) => (
@@ -284,7 +287,7 @@ export default function Playground() {
             </div>
           </div>
 
-          {/* Chat Messages Window */}
+          {/* Messages Area */}
           <div className={`playground-messages ${viewMode === 'widget' ? 'widget-style' : ''}`}>
             {messages.map(m => (
               <div key={m.id} className={`p-msg p-msg--${m.role}`}>
@@ -296,10 +299,10 @@ export default function Playground() {
                   <div className="msg-bubble">
                     <p className="msg-text">{m.text}</p>
 
-                    {/* Source Attribution */}
+                    {/* Source Citation Anchor Link */}
                     {m.source && (
                       <div className="source-citation">
-                        <span className="citation-title">Grounded Source:</span>
+                        <span className="citation-title">Grounded Citation:</span>
                         <a
                           href={m.source}
                           target="_blank"
@@ -311,11 +314,11 @@ export default function Playground() {
                       </div>
                     )}
 
-                    {/* Low Confidence Trigger / Fallback Warning */}
+                    {/* Low Confidence Trigger / Sentinel */}
                     {m.confident === false && (
                       <div className="low-confidence-notice">
                         <AlertTriangle size={14} />
-                        <span>Low retrieval confidence — Triggered lead capture sentinel</span>
+                        <span>Confidence below threshold — Lead capture sentinel triggered</span>
                       </div>
                     )}
                   </div>
@@ -335,7 +338,7 @@ export default function Playground() {
                           </>
                         ) : (
                           <>
-                            <AlertTriangle size={11} /> Unconfident
+                            <AlertTriangle size={11} /> Fallback
                           </>
                         )}
                       </span>
@@ -365,7 +368,7 @@ export default function Playground() {
                   </div>
                   <div className="msg-meta">
                     <span className="latency-tag">
-                      <Clock size={11} /> Querying Chroma Cloud + Groq...
+                      <Clock size={11} /> Computing vector similarity + Groq inference...
                     </span>
                   </div>
                 </div>
@@ -374,12 +377,12 @@ export default function Playground() {
             <div ref={chatEndRef} />
           </div>
 
-          {/* Chat Input Bar */}
+          {/* Input Bar */}
           <div className="playground-input-row">
             <input
               type="text"
               className="playground-input"
-              placeholder={`Ask anything about ${selectedSite.name}... (e.g., services, contact, details)`}
+              placeholder={`Send inquiry to ${selectedSite.name}... (e.g., pricing, technical capabilities)`}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
@@ -391,52 +394,52 @@ export default function Playground() {
               disabled={loading || !input.trim()}
             >
               <Send size={15} />
-              <span>Ask</span>
+              <span>Query Agent</span>
             </button>
           </div>
         </div>
 
-        {/* Right Sidebar: Real-time RAG Telemetry & System Specs */}
+        {/* Right: RAG Telemetry & Model Specs */}
         <div className="telemetry-sidebar card">
           <h3 className="telemetry-title">
-            <ShieldCheck size={16} className="text-teal" /> RAG Telemetry & Grounding
+            <Activity size={16} className="text-teal" /> Real-Time Telemetry
           </h3>
 
           <div className="telemetry-metric-group">
             <div className="telemetry-box">
-              <span className="tel-label">Latest Latency</span>
+              <span className="tel-label">Roundtrip Latency</span>
               <span className="tel-val highlight-val">
-                {lastLatency !== null ? `${lastLatency} ms` : 'Idle'}
+                {lastLatency !== null ? `${lastLatency} ms` : 'Standby'}
               </span>
-              <small className="tel-sub">Groq LPU Acceleration</small>
+              <small className="tel-sub">Groq LPU Hardware Acceleration</small>
             </div>
 
             <div className="telemetry-box">
-              <span className="tel-label">Vector Match</span>
-              <span className="tel-val">Cosine Similarity</span>
-              <small className="tel-sub">Top 6 Chunks Threshold: 0.35</small>
+              <span className="tel-label">Vector Space</span>
+              <span className="tel-val">Cosine Distance</span>
+              <small className="tel-sub">Top 6 Chunks · Inclusion ≥ 0.35</small>
             </div>
           </div>
 
           <div className="divider" />
 
-          <h4 className="inspector-heading">Grounding Rules Active</h4>
+          <h4 className="inspector-heading">Active Guardrails</h4>
           <ul className="spec-list">
             <li>
               <CheckCircle2 size={13} className="text-success" />
-              <span><strong>Strict Zero-Shot:</strong> LLM cannot use outside training facts.</span>
+              <span><strong>Zero-Shot Grounding:</strong> Model answers strictly using retrieved chunks.</span>
             </li>
             <li>
               <CheckCircle2 size={13} className="text-success" />
-              <span><strong>NOT_IN_CONTEXT Sentinel:</strong> Verified server-side before delivery.</span>
+              <span><strong>Anti-Hallucination Sentinel:</strong> NOT_IN_CONTEXT parsed server-side.</span>
             </li>
             <li>
               <CheckCircle2 size={13} className="text-success" />
-              <span><strong>Heading Anchors:</strong> Deep links directly to section anchors.</span>
+              <span><strong>Heading Anchors:</strong> Automated deep-linking to exact source sections.</span>
             </li>
             <li>
               <CheckCircle2 size={13} className="text-success" />
-              <span><strong>Tenant Isolation:</strong> Dedicated Chroma Cloud collection.</span>
+              <span><strong>Multi-Tenant Isolation:</strong> Dedicated Chroma Cloud collection.</span>
             </li>
           </ul>
 

@@ -9,15 +9,16 @@ import {
   Save,
   Sparkles,
   Layers,
-  HelpCircle,
-  Code
+  ShieldCheck,
+  Cpu,
+  Database
 } from 'lucide-react'
-import { TUTORIAL_CONFIG } from '../config'
+import { PRODUCT_TOUR_CONFIG, APP_NAME } from '../config'
 import './VideoTutorial.css'
 
 export default function VideoTutorial({ onOpenArchitecture }) {
   const [videoUrl, setVideoUrl] = useState(() => {
-    return localStorage.getItem('chatagent_tutorial_url') || ''
+    return localStorage.getItem('cognisite_tour_url') || ''
   })
   const [isEditing, setIsEditing] = useState(false)
   const [inputUrl, setInputUrl] = useState(videoUrl)
@@ -26,11 +27,10 @@ export default function VideoTutorial({ onOpenArchitecture }) {
   function saveUrl() {
     const trimmed = inputUrl.trim()
     setVideoUrl(trimmed)
-    localStorage.setItem('chatagent_tutorial_url', trimmed)
+    localStorage.setItem('cognisite_tour_url', trimmed)
     setIsEditing(false)
   }
 
-  // Convert typical YouTube watch or Loom links into embeddable URLs
   function getEmbedUrl(rawUrl) {
     if (!rawUrl) return null
 
@@ -57,15 +57,15 @@ export default function VideoTutorial({ onOpenArchitecture }) {
 
   return (
     <div className="tutorial-page fade-in">
-      {/* Top Banner */}
+      {/* Product Hero Header */}
       <div className="tutorial-hero card">
         <div className="hero-text-wrap">
           <span className="badge badge-purple">
-            <Video size={13} /> Video Showcase
+            <Video size={13} /> Official Platform Tour
           </span>
-          <h2 className="hero-title">Live Tutorial & Technical Walkthrough</h2>
+          <h2 className="hero-title">{APP_NAME} Enterprise Architecture Walkthrough</h2>
           <p className="hero-desc">
-            A comprehensive video demonstration explaining how the decoupled crawler indexes web content, stores vector embeddings in ChromaDB Cloud, and serves grounded answers via Groq's Llama 3.1 8B engine.
+            A deep-dive video walkthrough explaining how {APP_NAME}'s decoupled ingestion engine crawls websites, embeds semantic chunks into <strong>ChromaDB Cloud</strong>, and delivers sub-300ms grounded answers using <strong>Groq LPU Llama 3.1</strong>.
           </p>
         </div>
 
@@ -77,20 +77,20 @@ export default function VideoTutorial({ onOpenArchitecture }) {
               setIsEditing(!isEditing)
             }}
           >
-            <Edit3 size={14} /> {videoUrl ? 'Update Video Link' : 'Set Video Link'}
+            <Edit3 size={14} /> {videoUrl ? 'Configure Tour Feed' : 'Set Tour Video'}
           </button>
           <button className="btn btn-primary btn-sm" onClick={onOpenArchitecture}>
-            <Layers size={14} /> View Architecture
+            <Layers size={14} /> Architecture Diagram
           </button>
         </div>
       </div>
 
-      {/* URL Edit Form Drawer */}
+      {/* Video Source Configuration Drawer */}
       {isEditing && (
         <div className="url-edit-bar card fade-in">
           <div className="url-edit-header">
-            <strong>Embed Your Screen Recording (Loom, YouTube, or MP4)</strong>
-            <small>Paste any public Loom video link or YouTube video URL</small>
+            <strong>Configure Product Walkthrough Video Feed</strong>
+            <small>Provide a public Loom video or YouTube embed URL</small>
           </div>
           <div className="url-input-group">
             <input
@@ -101,7 +101,7 @@ export default function VideoTutorial({ onOpenArchitecture }) {
               onChange={e => setInputUrl(e.target.value)}
             />
             <button className="btn btn-primary" onClick={saveUrl}>
-              <Save size={14} /> Save Video
+              <Save size={14} /> Save Video Source
             </button>
             <button className="btn btn-ghost" onClick={() => setIsEditing(false)}>
               Cancel
@@ -110,15 +110,15 @@ export default function VideoTutorial({ onOpenArchitecture }) {
         </div>
       )}
 
-      {/* Main Grid: Video Player + Timestamps/Chapters */}
+      {/* Main Grid: Video Player + Chapter Specs */}
       <div className="tutorial-grid">
-        {/* Left: Video Player Area */}
+        {/* Left: Video Player Card */}
         <div className="video-player-card card">
           {embedSrc ? (
             <div className="video-aspect-frame">
               <iframe
                 src={embedSrc}
-                title="System Walkthrough"
+                title="CogniSite Architecture Walkthrough"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 className="video-iframe"
@@ -130,16 +130,16 @@ export default function VideoTutorial({ onOpenArchitecture }) {
                 <div className="placeholder-icon">
                   <Play size={32} />
                 </div>
-                <h3>Your Screen Recording Goes Here</h3>
+                <h3>Product Tour Video Feed</h3>
                 <p>
-                  Record a 2-to-3 minute demo using Loom, OBS, or Chrome, then click <strong>"Set Video Link"</strong> above to embed it directly into your portfolio!
+                  Embed a 3-minute video walkthrough of your live platform. Click <strong>"Set Tour Video"</strong> above to link your Loom or YouTube recording.
                 </p>
                 <button
                   className="btn btn-primary btn-sm"
                   onClick={() => setIsEditing(true)}
-                  style={{ marginTop: 12 }}
+                  style={{ marginTop: 14 }}
                 >
-                  <Edit3 size={14} /> Paste Screen Recording URL
+                  <Edit3 size={14} /> Link Screen Recording URL
                 </button>
               </div>
             </div>
@@ -147,8 +147,8 @@ export default function VideoTutorial({ onOpenArchitecture }) {
 
           <div className="video-footer-meta">
             <div className="video-meta-left">
-              <span className="badge badge-green">● Ready for Resume Showcase</span>
-              <span className="meta-length">Duration: ~3-4 mins</span>
+              <span className="badge badge-green">● High-Definition System Walkthrough</span>
+              <span className="meta-length">Runtime: ~3-4 mins</span>
             </div>
             {videoUrl && (
               <a
@@ -157,23 +157,23 @@ export default function VideoTutorial({ onOpenArchitecture }) {
                 rel="noopener noreferrer"
                 className="open-external-link"
               >
-                Open in new tab <ExternalLink size={13} />
+                Open Stream in New Window <ExternalLink size={13} />
               </a>
             )}
           </div>
         </div>
 
-        {/* Right: Video Chapters & Recording Script */}
+        {/* Right: Chapter Breakdown & Architecture Highlights */}
         <div className="chapters-sidebar card">
           <h3 className="sidebar-heading">
-            <Clock size={16} className="text-teal" /> Presentation Chapters
+            <Clock size={16} className="text-teal" /> Tour Chapters
           </h3>
           <p className="sidebar-sub">
-            Recommended breakdown for your video walkthrough:
+            Technical highlights and system milestones covered in this walkthrough:
           </p>
 
           <div className="chapters-list">
-            {TUTORIAL_CONFIG.chapters.map((ch, idx) => (
+            {PRODUCT_TOUR_CONFIG.chapters.map((ch, idx) => (
               <div
                 key={idx}
                 className={`chapter-item ${activeChapter === idx ? 'active' : ''}`}
@@ -190,24 +190,24 @@ export default function VideoTutorial({ onOpenArchitecture }) {
 
           <div className="divider" />
 
-          {/* Recruiter Talking Points */}
+          {/* Core Technical Highlights */}
           <div className="talking-points-box">
             <div className="points-header">
-              <Sparkles size={14} className="text-warn" />
-              <strong>What to Emphasize in the Recording:</strong>
+              <ShieldCheck size={14} className="text-accent" />
+              <strong>Core Engineering Principles Demonstrated:</strong>
             </div>
             <ul className="points-list">
               <li>
-                <strong>Architectural separation:</strong> Point out why the crawler is decoupled from the Render web API.
+                <strong>Decoupled Ingestion:</strong> Isolates resource-heavy Playwright headless browser workloads from real-time API traffic.
               </li>
               <li>
-                <strong>Grounded RAG:</strong> Show that Groq Llama 3.1 refuses to hallucinate when asked about topics not on the site.
+                <strong>Deterministic Grounding:</strong> Groq Llama 3.1 utilizes strict negative constraints to eliminate AI hallucinations.
               </li>
               <li>
-                <strong>Heading deep-links:</strong> Show that citations jump directly to the exact HTML section anchor.
+                <strong>Heading-Level Citations:</strong> Automates deep-linking directly to target HTML section anchors.
               </li>
               <li>
-                <strong>Tenant MongoDB:</strong> Explain that leads flow into each client's isolated database.
+                <strong>Multi-Tenant Isolation:</strong> Dedicated Chroma Cloud collections and isolated customer MongoDB lead channels.
               </li>
             </ul>
           </div>

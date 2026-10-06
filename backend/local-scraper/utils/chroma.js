@@ -4,7 +4,11 @@ let client = null;
 
 function getClient() {
   if (!client) {
-    client = new CloudClient();
+    client = new CloudClient({
+      apiKey: process.env.CHROMA_API_KEY,
+      database: process.env.CHROMA_DATABASE,
+      tenant: process.env.CHROMA_TENANT,
+    });
   }
   return client;
 }

@@ -91,8 +91,8 @@ export default function RegisterSite() {
           <div className="register-form-col">
             <div className="card">
               <div style={{
-                background: 'rgba(108, 99, 255, 0.08)',
-                border: '1px solid rgba(108, 99, 255, 0.25)',
+                background: 'rgba(6, 182, 212, 0.08)',
+                border: '1px solid rgba(6, 182, 212, 0.25)',
                 borderRadius: 8,
                 padding: '14px 16px',
                 marginBottom: 20,
@@ -100,9 +100,9 @@ export default function RegisterSite() {
                 lineHeight: 1.5
               }}>
                 <strong style={{ color: 'var(--accent3)', display: 'block', marginBottom: 4 }}>
-                  ⚙️ Ingestion Worker Architecture Note:
+                  🛡️ Enterprise Private Ingestion Agent:
                 </strong>
-                Crawling heavy JS pages uses <strong>Playwright & Crawlee</strong>. To protect cloud web services from memory limits (512MB), scraping is executed on the dedicated crawler worker:
+                For firewalled domains, anti-bot protection, or JavaScript-heavy single-page applications, crawl execution is handled by your isolated crawler agent (Playwright + Crawlee) feeding directly into ChromaDB Cloud:
                 <pre style={{
                   background: 'var(--bg)',
                   padding: '8px 12px',
@@ -114,8 +114,8 @@ export default function RegisterSite() {
                 }}>cd backend/local-scraper && npm run dev</pre>
               </div>
 
-              <h2 className="form-section-title">Website Details</h2>
-              <p className="form-section-desc">Enter the website URL to scrape and index its content.</p>
+              <h2 className="form-section-title">Domain & Tenant Configuration</h2>
+              <p className="form-section-desc">Specify the target website URL to crawl and vectorize into a dedicated Chroma Cloud collection.</p>
               <div className="divider" />
 
               <div className="field">

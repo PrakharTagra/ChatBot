@@ -1,5 +1,6 @@
 import React from 'react'
-import { X, Server, Database, Cpu, Globe, ArrowRight, ShieldCheck, Zap } from 'lucide-react'
+import { X, Server, Database, Cpu, Globe, ArrowRight, ShieldCheck, Zap, Lock, Activity } from 'lucide-react'
+import { APP_NAME } from '../config'
 import './ArchitectureModal.css'
 
 export default function ArchitectureModal({ isOpen, onClose }) {
@@ -10,8 +11,8 @@ export default function ArchitectureModal({ isOpen, onClose }) {
       <div className="modal-container fade-in" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-wrap">
-            <span className="badge badge-purple">System Architecture</span>
-            <h2>Decoupled RAG Pipeline Design</h2>
+            <span className="badge badge-teal">Architecture & Security Specification</span>
+            <h2>{APP_NAME} Enterprise RAG System Architecture</h2>
           </div>
           <button className="modal-close-btn" onClick={onClose}>
             <X size={20} />
@@ -20,12 +21,11 @@ export default function ArchitectureModal({ isOpen, onClose }) {
 
         <div className="modal-body">
           <div className="arch-notice">
-            <ShieldCheck size={20} className="text-success" />
+            <ShieldCheck size={22} className="text-success" style={{ flexShrink: 0 }} />
             <div>
-              <strong>Why Decoupled Ingestion? (Senior Engineering Choice)</strong>
+              <strong>Decoupled Ingestion & Serving Isolation (Enterprise Standard)</strong>
               <p>
-                Headless browser crawling (Playwright/Chromium) and vector embedding generation require significant RAM and compute.
-                Decoupling the <strong>Ingestion Worker</strong> from the <strong>Real-Time Serving API (Render)</strong> ensures the chat API never crashes from out-of-memory errors and maintains sub-300ms response times.
+                To maintain sub-300ms SLA response times and eliminate out-of-memory bottlenecks, {APP_NAME} completely separates the <strong>Heavy Ingestion Worker (Playwright/Crawlee)</strong> from the <strong>Real-Time Serving API (Render + Groq)</strong>. Vector embeddings are stored in isolated per-tenant collections inside ChromaDB Cloud.
               </p>
             </div>
           </div>
@@ -33,15 +33,15 @@ export default function ArchitectureModal({ isOpen, onClose }) {
           <div className="diagram-grid">
             <div className="diagram-card">
               <div className="diagram-card-header">
-                <Globe size={18} className="text-accent" />
-                <span>1. Ingestion Pipeline</span>
+                <Globe size={16} className="text-accent" />
+                <span>1. Ingestion & Extraction</span>
               </div>
               <div className="diagram-card-body">
-                <div className="node">Target Website URL</div>
+                <div className="node">Target Customer Domain</div>
                 <div className="arrow-down">↓</div>
                 <div className="node highlight">
                   <strong>Playwright Crawler</strong>
-                  <small>Crawlee · Single concurrency</small>
+                  <small>Crawlee Engine · Single Concurrency</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node">
@@ -53,36 +53,36 @@ export default function ArchitectureModal({ isOpen, onClose }) {
 
             <div className="diagram-card">
               <div className="diagram-card-header">
-                <Database size={18} className="text-teal" />
-                <span>2. Vector Database</span>
+                <Database size={16} className="text-teal" />
+                <span>2. High-Dimensional Vectors</span>
               </div>
               <div className="diagram-card-body">
                 <div className="node highlight">
                   <strong>Transformers.js</strong>
-                  <small>all-MiniLM-L6-v2 Embeddings</small>
+                  <small>all-MiniLM-L6-v2 Local Embeddings</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node highlight-chroma">
                   <strong>ChromaDB Cloud</strong>
-                  <small>Cosine Similarity · Top-6 Chunks</small>
+                  <small>Cosine Similarity · Top 6 Chunks</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node">
-                  <strong>Per-Site Tenant Isolation</strong>
-                  <small>1 Collection per registered website</small>
+                  <strong>Multi-Tenant Boundary</strong>
+                  <small>Dedicated Isolated Collections</small>
                 </div>
               </div>
             </div>
 
             <div className="diagram-card">
               <div className="diagram-card-header">
-                <Zap size={18} className="text-yellow" />
-                <span>3. Serving & RAG API</span>
+                <Zap size={16} className="text-yellow" />
+                <span>3. Serving & Guardrails</span>
               </div>
               <div className="diagram-card-body">
                 <div className="node">
-                  <strong>Express API on Render</strong>
-                  <small>Stateless · Sub-300ms latency</small>
+                  <strong>Serving API (Render)</strong>
+                  <small>Stateless Express · Sub-300ms SLA</small>
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node highlight-groq">
@@ -91,8 +91,8 @@ export default function ArchitectureModal({ isOpen, onClose }) {
                 </div>
                 <div className="arrow-down">↓</div>
                 <div className="node">
-                  <strong>Confidence Gate & Leads</strong>
-                  <small>MongoDB Per-Site Lead Capture</small>
+                  <strong>Isolated Lead Routing</strong>
+                  <small>Customer MongoDB Instance</small>
                 </div>
               </div>
             </div>
@@ -100,20 +100,20 @@ export default function ArchitectureModal({ isOpen, onClose }) {
 
           <div className="pipeline-highlights">
             <div className="highlight-item">
-              <strong>🎯 Strict Anti-Hallucination:</strong> If retrieved chunk similarity falls below threshold, system bypasses LLM and triggers lead capture instead of guessing.
+              <strong>🔒 Zero-Hallucination Guardrail:</strong> If semantic chunk similarity falls below threshold, the inference engine returns an exact NOT_IN_CONTEXT sentinel parsed server-side, gracefully triggering lead capture rather than guessing.
             </div>
             <div className="highlight-item">
-              <strong>⚡ Instant Vector Queries:</strong> Query embeddings are computed instantly and matched against Chroma Cloud index in &lt;100ms.
+              <strong>⚡ Hardware-Accelerated Inference:</strong> Groq LPUs provide deterministic token generation speeds up to 10x faster than traditional GPU clusters.
             </div>
             <div className="highlight-item">
-              <strong>📦 Zero-Dependency Widget:</strong> 1-line script tag embeddable anywhere without requiring React or complex build tools.
+              <strong>📦 Universal Zero-Dependency Embed:</strong> The customer-facing chat widget bundles into a lightweight vanilla JS script, embeddable on any CMS, Shopify, Next.js, or plain HTML site in 1 line.
             </div>
           </div>
         </div>
 
         <div className="modal-footer">
           <button className="btn btn-primary" onClick={onClose}>
-            Got it, Back to Demo
+            Close Architecture Inspector
           </button>
         </div>
       </div>

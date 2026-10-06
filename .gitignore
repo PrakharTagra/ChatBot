@@ -1,5 +1,21 @@
+# Dependencies
+node_modules/
 /backend/local-scraper/node_modules/
-/backend/local-scraper/storage/
 /backend/render-api/node_modules/
+/frontend/node_modules/
+
+# Build artifacts
+/frontend/dist/
+dist/
+
+# Storage & Crawlee data
+/backend/local-scraper/storage/
+storage/
+
+# Environment secrets
+.env
+.env.*
+*.env
 /backend/local-scraper/.env
 /backend/render-api/.env
+/frontend/.env
