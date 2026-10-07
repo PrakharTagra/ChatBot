@@ -28,11 +28,14 @@ export default function Playground() {
   const initialSiteId = searchParams.get('site') || ''
 
   const [availableSites, setAvailableSites] = useState(() => getScrapedSites())
-  const [selectedSiteId, setSelectedSiteId] = useState(initialSiteId || availableSites[0]?.websiteId || '')
-  const [selectedSite, setSelectedSite] = useState(availableSites[0] || null)
+  const [selectedSiteId, setSelectedSiteId] = useState(initialSiteId || '')
+  const [loadingSites, setLoadingSites] = useState(true)
+
+  // Derived selected site - always guaranteed synchronous with availableSites & selectedSiteId
+  const selectedSite = availableSites.find(s => s.websiteId === selectedSiteId) || availableSites[0] || null
 
   // Chatbot configuration per website
-  const [botConfig, setBotConfig] = useState(() => getChatbotConfig(selectedSiteId))
+  const [botConfig, setBotConfig] = useState(() => getChatbotConfig(selectedSite?.websiteId || ''))
   const [isCustomizing, setIsCustomizing] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editColor, setEditColor] = useState('')
@@ -66,6 +69,7 @@ export default function Playground() {
   // Fetch available sites from API and merge with locally registered sites
   useEffect(() => {
     async function loadSites() {
+      setLoadingSites(true)
       try {
         const res = await axios.get(`${RENDER_API}/api/sites`, { timeout: 6000 }).catch(() => ({ data: { sites: [] } }))
         const apiSites = (res.data?.sites || []).map(s => {
@@ -113,50 +117,52 @@ export default function Playground() {
         if (combined.length > 0) {
           const target = initialSiteId && combined.some(s => s.websiteId === initialSiteId)
             ? initialSiteId
-            : combined[0].websiteId
+            : (selectedSiteId && combined.some(s => s.websiteId === selectedSiteId) ? selectedSiteId : combined[0].websiteId)
           setSelectedSiteId(target)
         }
       } catch {
         const localSites = getScrapedSites()
         setAvailableSites(localSites)
         if (localSites.length > 0) {
-          setSelectedSiteId(localSites[0].websiteId)
+          const target = initialSiteId && localSites.some(s => s.websiteId === initialSiteId)
+            ? initialSiteId
+            : localSites[0].websiteId
+          setSelectedSiteId(target)
         }
+      } finally {
+        setLoadingSites(false)
       }
     }
     loadSites()
   }, [initialSiteId])
 
-  // Switch site and load its custom chatbot branding
+  // Synchronize chatbot branding whenever selected site changes
   useEffect(() => {
-    if (!availableSites || availableSites.length === 0) return
+    if (!selectedSite) return
 
-    const site = availableSites.find(s => s.websiteId === selectedSiteId) || availableSites[0]
-    if (!site) return
-
-    setSelectedSite(site)
-
-    const cfg = getChatbotConfig(site.websiteId, site)
+    const cfg = getChatbotConfig(selectedSite.websiteId, selectedSite)
     setBotConfig(cfg)
-    setEditTitle(cfg.title)
+    setEditTitle(cfg.title || `${selectedSite.name} Assistant`)
     setEditColor(cfg.primaryColor || '#0f172a')
     setEditLogo(cfg.logoUrl || '')
-    setEditWelcome(cfg.welcomeMessage)
+    setEditWelcome(cfg.welcomeMessage || `Hello. How can I assist you with ${selectedSite.name}?`)
 
-    resetConversation(site, cfg)
+    resetConversation(selectedSite, cfg)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSiteId, availableSites])
+  }, [selectedSite?.websiteId])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
   function handleSaveCustomization() {
+    if (!selectedSite) return
+    const siteName = selectedSite.name || selectedSite.websiteId
     const updated = {
-      title: editTitle.trim() || `${selectedSite.name} Assistant`,
+      title: editTitle.trim() || `${siteName} Assistant`,
       primaryColor: editColor || '#0f172a',
       logoUrl: editLogo.trim(),
-      welcomeMessage: editWelcome.trim() || `Hello. How can I assist you with ${selectedSite.name}?`
+      welcomeMessage: editWelcome.trim() || `Hello. How can I assist you with ${siteName}?`
     }
     setBotConfig(updated)
     saveChatbotConfig(selectedSite.websiteId, updated)
@@ -166,7 +172,7 @@ export default function Playground() {
 
   async function handleSend(promptText = null) {
     const textToSend = typeof promptText === 'string' ? promptText : input.trim()
-    if (!textToSend || loading) return
+    if (!textToSend || loading || !selectedSite) return
 
     setInput('')
     const userMsgId = 'u-' + Date.now()
@@ -240,7 +246,16 @@ export default function Playground() {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  if (availableSites.length === 0) {
+  if (loadingSites) {
+    return (
+      <div className="dash-loading" style={{ minHeight: '60vh' }}>
+        <div className="spinner" />
+        <span>Loading knowledge bases...</span>
+      </div>
+    )
+  }
+
+  if (availableSites.length === 0 || !selectedSite) {
     return (
       <div className="playground-container fade-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <div className="card" style={{ maxWidth: 460, textAlign: 'center', padding: '48px 24px' }}>
@@ -262,6 +277,7 @@ export default function Playground() {
   }
 
   const primaryColor = botConfig.primaryColor || '#0f172a'
+  const siteName = selectedSite?.name || selectedSite?.websiteId || 'Website'
 
   return (
     <div className="playground-container fade-in">
@@ -298,7 +314,7 @@ export default function Playground() {
           </button>
 
           <a
-            href={selectedSite.url}
+            href={selectedSite?.url || '#'}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-ghost btn-sm"
@@ -323,7 +339,7 @@ export default function Playground() {
       {isCustomizing && (
         <div className="bot-customizer-card card fade-in">
           <div className="customizer-header">
-            <h4>Customize Chatbot for {selectedSite.name}</h4>
+            <h4>Customize Chatbot for {siteName}</h4>
             <span className="customizer-sub">Changes apply immediately to this website's chatbot widget.</span>
           </div>
 
@@ -412,8 +428,8 @@ export default function Playground() {
                 </div>
               )}
               <div>
-                <strong className="bot-header-title">{botConfig.title || selectedSite.name}</strong>
-                <span className="bot-header-subtitle">{selectedSite.name} Support</span>
+                <strong className="bot-header-title">{botConfig.title || siteName}</strong>
+                <span className="bot-header-subtitle">{siteName} Support</span>
               </div>
             </div>
 
@@ -427,7 +443,7 @@ export default function Playground() {
           <div className="quick-prompts-bar">
             <span className="prompts-label">Questions:</span>
             <div className="prompts-scroll">
-              {(selectedSite.sampleQuestions || []).map((q, idx) => (
+              {(selectedSite?.sampleQuestions || []).map((q, idx) => (
                 <button
                   key={idx}
                   className="prompt-chip"
@@ -533,7 +549,7 @@ export default function Playground() {
             <input
               type="text"
               className="playground-input"
-              placeholder={`Ask ${botConfig.title || selectedSite.name}...`}
+              placeholder={`Ask ${botConfig.title || siteName}...`}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
@@ -591,8 +607,8 @@ export default function Playground() {
           <div className="divider" />
 
           <div className="site-summary-box">
-            <strong className="summary-name">{selectedSite.name}</strong>
-            <p className="summary-desc">{selectedSite.description}</p>
+            <strong className="summary-name">{siteName}</strong>
+            <p className="summary-desc">{selectedSite?.description || `Knowledge base for ${siteName}`}</p>
           </div>
         </div>
       </div>

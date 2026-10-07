@@ -178,8 +178,9 @@ export default function Dashboard({ onOpenArchitecture }) {
           </div>
         ) : (
           filteredSites.map(site => {
+          const siteName = site.name || site.websiteId || 'Website'
           const botColor = site.chatbot?.primaryColor || '#0f172a'
-          const botTitle = site.chatbot?.title || `${site.name} Support`
+          const botTitle = site.chatbot?.title || `${siteName} Support`
 
           return (
             <div key={site.websiteId} className="site-row-card card">
@@ -191,13 +192,13 @@ export default function Dashboard({ onOpenArchitecture }) {
                       style={{ backgroundColor: botColor }}
                       title={`Chatbot theme color: ${botColor}`}
                     />
-                    <h3 className="site-title">{site.name}</h3>
+                    <h3 className="site-title">{siteName}</h3>
                   </div>
                   <span className="badge badge-green">Active</span>
                 </div>
 
-                <a href={site.url} target="_blank" rel="noopener noreferrer" className="site-link">
-                  {site.url} <ExternalLink size={11} />
+                <a href={site.url || '#'} target="_blank" rel="noopener noreferrer" className="site-link">
+                  {site.url || site.websiteId} <ExternalLink size={11} />
                 </a>
 
                 <p className="site-desc">{site.description}</p>
