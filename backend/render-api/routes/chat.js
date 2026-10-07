@@ -181,6 +181,7 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
         answer: formatGroundedSnippet(best.content),
         source: best.url,
         confident: true,
+        llmError: err.message,
       });
     }
 
