@@ -13,10 +13,6 @@ const CANDIDATE_MODELS = [
   process.env.GROQ_MODEL,
   "llama-3.3-70b-versatile",
   "llama-3.1-8b-instant",
-  "llama3-70b-8192",
-  "llama3-8b-8192",
-  "gemma2-9b-it",
-  "mixtral-8x7b-32768",
 ].filter(Boolean);
 
 async function createChatCompletionWithFallback(groqClient, messages, maxTokens = 800) {
@@ -31,11 +27,7 @@ async function createChatCompletionWithFallback(groqClient, messages, maxTokens 
       return completion;
     } catch (err) {
       lastError = err;
-      if (err.status === 404 || err.message?.includes("model") || err.error?.code === "model_not_found") {
-        console.warn(`Groq model "${model}" unavailable (${err.message}), trying fallback...`);
-        continue;
-      }
-      throw err;
+      console.warn(`Groq model "${model}" failed (${err.message}), trying next...`);
     }
   }
   throw lastError;
@@ -80,6 +72,9 @@ router.post("/", async (req, res) => {
     });
   }
 
+  let ranked = [];
+  let relevantChunks = [];
+
   try {
     const recentUserContext = history
       .filter((m) => m.role === "user")
@@ -88,7 +83,7 @@ router.post("/", async (req, res) => {
       .join(" ");
     const contextualQuery = recentUserContext ? `${recentUserContext} ${trimmed}` : trimmed;
     const queryEmbedding = await getEmbedding(contextualQuery);
-    const ranked = await queryChroma(websiteId, queryEmbedding, TOP_K);
+    ranked = await queryChroma(websiteId, queryEmbedding, TOP_K);
     console.log("TOP RESULTS:", ranked.map(r => ({
       score: r.score.toFixed(3),
       snippet: r.content.slice(0, 80)
@@ -105,7 +100,7 @@ router.post("/", async (req, res) => {
     const topScore = ranked[0].score;
     const retrievalConfident = topScore >= SIMILARITY_THRESHOLD;
 
-    const relevantChunks = ranked.filter((c) => c.score >= CONTEXT_INCLUSION_THRESHOLD);
+    relevantChunks = ranked.filter((c) => c.score >= CONTEXT_INCLUSION_THRESHOLD);
 
     const context = relevantChunks
       .map((c, i) => `[Source ${i + 1}: ${c.url}]\n${c.content}`)
@@ -180,8 +175,8 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
     console.error("Chat error:", err);
 
     // If vector search returned knowledge base content but LLM generation encountered an issue, provide the grounded chunk directly
-    if (typeof relevantChunks !== "undefined" && relevantChunks && relevantChunks.length > 0) {
-      const best = relevantChunks[0];
+    if (relevantChunks.length > 0 || ranked.length > 0) {
+      const best = relevantChunks[0] || ranked[0];
       return res.json({
         answer: stripMarkdown(best.content),
         source: best.url,
@@ -189,7 +184,12 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
       });
     }
 
-    return res.status(500).json({ error: "Chat failed.", detail: err.message });
+    return res.json({
+      answer: `I could not retrieve an answer at this time. Please leave your contact details so our team can follow up directly.`,
+      source: null,
+      confident: false,
+      action: "collect_lead",
+    });
   }
 });
 
