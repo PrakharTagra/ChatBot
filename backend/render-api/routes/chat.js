@@ -178,7 +178,7 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
     if (relevantChunks.length > 0 || ranked.length > 0) {
       const best = relevantChunks[0] || ranked[0];
       return res.json({
-        answer: stripMarkdown(best.content),
+        answer: formatGroundedSnippet(best.content),
         source: best.url,
         confident: true,
       });
@@ -205,6 +205,13 @@ function stripMarkdown(text) {
     .replace(/^\s*\d+\.\s+/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function formatGroundedSnippet(text) {
+  if (!text) return "";
+  let clean = stripMarkdown(text);
+  clean = clean.replace(/\?\s+([A-Z])/g, "?\n\n$1");
+  return clean.trim();
 }
 
 export default router;
