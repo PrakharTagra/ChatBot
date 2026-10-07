@@ -9,6 +9,38 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
+const CANDIDATE_MODELS = [
+  process.env.GROQ_MODEL,
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "llama3-70b-8192",
+  "llama3-8b-8192",
+  "gemma2-9b-it",
+  "mixtral-8x7b-32768",
+].filter(Boolean);
+
+async function createChatCompletionWithFallback(groqClient, messages, maxTokens = 800) {
+  let lastError = null;
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const completion = await groqClient.chat.completions.create({
+        model,
+        max_tokens: maxTokens,
+        messages,
+      });
+      return completion;
+    } catch (err) {
+      lastError = err;
+      if (err.status === 404 || err.message?.includes("model") || err.error?.code === "model_not_found") {
+        console.warn(`Groq model "${model}" unavailable (${err.message}), trying fallback...`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 const SIMILARITY_THRESHOLD = 0.22;
 const CONTEXT_INCLUSION_THRESHOLD = 0.20;
 const TOP_K = 6;
@@ -105,15 +137,15 @@ No relevant content was found for this question.
 Write ONE short plain sentence only: say ${siteName} couldn't find that information but can connect them with someone from the team if they leave their details.
 No markdown, no links — just the plain sentence. Refer to the organisation as "${siteName}", never as "the website".`;
 
-    const completion = await getGroq().chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      max_tokens: 800,
-      messages: [
+    const completion = await createChatCompletionWithFallback(
+      getGroq(),
+      [
         { role: "system", content: systemPrompt },
         ...recentHistory,
         { role: "user", content: trimmed },
       ],
-    });
+      800
+    );
 
     const rawCompletion = completion.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
 
@@ -146,6 +178,17 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
     });
   } catch (err) {
     console.error("Chat error:", err);
+
+    // If vector search returned knowledge base content but LLM generation encountered an issue, provide the grounded chunk directly
+    if (typeof relevantChunks !== "undefined" && relevantChunks && relevantChunks.length > 0) {
+      const best = relevantChunks[0];
+      return res.json({
+        answer: stripMarkdown(best.content),
+        source: best.url,
+        confident: true,
+      });
+    }
+
     return res.status(500).json({ error: "Chat failed.", detail: err.message });
   }
 });
