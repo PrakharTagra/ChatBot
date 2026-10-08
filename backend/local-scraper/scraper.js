@@ -76,7 +76,10 @@ function extractText($) {
     if (phone) $(el).text(` [Phone: ${phone}] `);
   });
 
-  // 4. Separate block elements so words don't smash together
+  // 4. Separate block elements and prefix list items with bullets so text is structured
+  $("li").each((_, el) => {
+    $(el).prepend("• ");
+  });
   $("h1, h2, h3, h4, h5, h6, p, div, li, tr, blockquote, section, article, header, footer, aside, dl, dt, dd").each((_, el) => {
     $(el).append("\n");
   });
