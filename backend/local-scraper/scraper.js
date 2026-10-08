@@ -1,8 +1,27 @@
-import { PlaywrightCrawler, RequestQueue, Configuration } from "crawlee";
+import os from "os";
+import path from "path";
+import fs from "fs";
+import { PlaywrightCrawler, CheerioCrawler, RequestQueue, Configuration } from "crawlee";
+import { chromium } from "playwright";
 import { getEmbedding } from "./utils/embeddings.js";
 import { getOrCreateCollection, deleteCollection, setSiteMongoUri, getSiteMongoUri } from "./utils/chroma.js";
 
+const tempStorageDir = path.join(os.tmpdir(), "crawlee_storage");
+try {
+  if (!fs.existsSync(tempStorageDir)) fs.mkdirSync(tempStorageDir, { recursive: true });
+} catch {}
+Configuration.getGlobalConfig().set("storageDir", tempStorageDir);
 Configuration.getGlobalConfig().set("purgeOnStart", true);
+
+function canUsePlaywright() {
+  if (process.env.FORCE_CHEERIO === "true" || process.env.VERCEL) return false;
+  try {
+    const p = chromium.executablePath();
+    return fs.existsSync(p);
+  } catch {
+    return false;
+  }
+}
 
 const CHUNK_SIZE = 150;
 const CHUNK_OVERLAP = 30;
@@ -218,88 +237,159 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
   const requestQueue = await RequestQueue.open(queueId);
   await requestQueue.addRequest({ url: startUrl });
 
-  const crawler = new PlaywrightCrawler({
-    requestQueue,
-    maxRequestsPerCrawl: MAX_PAGES,
-    maxConcurrency: 1,
-    requestHandlerTimeoutSecs: 35,
+  const usePlaywright = canUsePlaywright();
+  const maxPages = (process.env.VERCEL || !usePlaywright) ? 20 : MAX_PAGES;
+  console.log(`Starting crawl using engine: ${usePlaywright ? "PlaywrightCrawler" : "CheerioCrawler"} (maxPages: ${maxPages})`);
 
-    preNavigationHooks: [
-      async ({ page }) => {
-        await page.route("**/*", (route) => {
-          const type = route.request().resourceType();
-          if (["image", "font", "media"].includes(type)) {
-            route.abort();
-          } else {
-            route.continue();
-          }
-        });
-      },
-    ],
+  let crawler;
+  if (usePlaywright) {
+    crawler = new PlaywrightCrawler({
+      requestQueue,
+      maxRequestsPerCrawl: maxPages,
+      maxConcurrency: 1,
+      requestHandlerTimeoutSecs: 35,
 
-    async requestHandler({ request, page, enqueueLinks, parseWithCheerio, log }) {
-      if (shouldSkipUrl(request.url)) {
-        log.info(`Skipping low-value page: ${request.url}`);
-        return;
-      }
-
-      log.info(`Scraping: ${request.url}`);
-
-      // Allow DOM and client-side hydration (React/Next/Vite) to render content
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(1000);
-
-      // ALWAYS enqueue same-domain links first so no deep pages are missed
-      await enqueueLinks({
-        strategy: "same-domain",
-        transformRequestFunction: (req) => {
-          try {
-            const u = new URL(req.url);
-            if (u.hostname !== startHostname) return false;
-            if (shouldSkipUrl(u.toString())) return false;
-            u.hash = "";
-            req.url = u.toString();
-            return req;
-          } catch {
-            return false;
-          }
+      preNavigationHooks: [
+        async ({ page }) => {
+          await page.route("**/*", (route) => {
+            const type = route.request().resourceType();
+            if (["image", "font", "media"].includes(type)) {
+              route.abort();
+            } else {
+              route.continue();
+            }
+          });
         },
-      }).catch((err) => log.warning(`Link enqueueing notice: ${err.message}`));
+      ],
 
-      if (isBlogListingPage(request.url)) {
-        log.info(`Crawled for links only (listing page): ${request.url}`);
-        return;
-      }
+      async requestHandler({ request, page, enqueueLinks, parseWithCheerio, log }) {
+        if (shouldSkipUrl(request.url)) {
+          log.info(`Skipping low-value page: ${request.url}`);
+          return;
+        }
 
-      const $ = await parseWithCheerio();
-      const { title, blocks: rawBlocks } = extractText($);
+        log.info(`Scraping: ${request.url}`);
 
-      const rawTotalLength = rawBlocks.reduce((sum, b) => sum + b.text.length, 0);
-      if (rawTotalLength < 50) {
-        log.info(`Skipping page with insufficient content (${rawTotalLength} chars): ${request.url}`);
-        return;
-      }
+        // Allow DOM and client-side hydration (React/Next/Vite) to render content
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
+        await page.waitForTimeout(1000);
 
-      const blocks = rawBlocks.filter((b) => {
-        if (b.text.length < BLOCK_DEDUP_MIN_LENGTH) return true;
-        const norm = normalizeText(b.text);
-        if (seenBlockText.has(norm)) return false;
-        seenBlockText.add(norm);
-        return true;
-      });
+        // ALWAYS enqueue same-domain links first so no deep pages are missed
+        await enqueueLinks({
+          strategy: "same-domain",
+          transformRequestFunction: (req) => {
+            try {
+              const u = new URL(req.url);
+              if (u.hostname !== startHostname) return false;
+              if (shouldSkipUrl(u.toString())) return false;
+              u.hash = "";
+              req.url = u.toString();
+              return req;
+            } catch {
+              return false;
+            }
+          },
+        }).catch((err) => log.warning(`Link enqueueing notice: ${err.message}`));
 
-      const chunks = chunkText(blocks);
-      log.info(`${chunks.length} chunks extracted from "${title}"`);
+        if (isBlogListingPage(request.url)) {
+          log.info(`Crawled for links only (listing page): ${request.url}`);
+          return;
+        }
 
-      if (chunks.length > 0) {
-        pages.set(request.url, { url: request.url, title, chunks });
-      }
-    },
+        const $ = await parseWithCheerio();
+        const { title, blocks: rawBlocks } = extractText($);
 
-    failedRequestHandler({ request, log }, error) {
-      log.warning(`Failed: ${request.url} — ${error.message}`);
-    },
-  });
+        const rawTotalLength = rawBlocks.reduce((sum, b) => sum + b.text.length, 0);
+        if (rawTotalLength < 50) {
+          log.info(`Skipping page with insufficient content (${rawTotalLength} chars): ${request.url}`);
+          return;
+        }
+
+        const blocks = rawBlocks.filter((b) => {
+          if (b.text.length < BLOCK_DEDUP_MIN_LENGTH) return true;
+          const norm = normalizeText(b.text);
+          if (seenBlockText.has(norm)) return false;
+          seenBlockText.add(norm);
+          return true;
+        });
+
+        const chunks = chunkText(blocks);
+        log.info(`${chunks.length} chunks extracted from "${title}"`);
+
+        if (chunks.length > 0) {
+          pages.set(request.url, { url: request.url, title, chunks });
+        }
+      },
+
+      failedRequestHandler({ request, log }, error) {
+        log.warning(`Failed: ${request.url} — ${error.message}`);
+      },
+    });
+  } else {
+    crawler = new CheerioCrawler({
+      requestQueue,
+      maxRequestsPerCrawl: maxPages,
+      maxConcurrency: 2,
+      requestHandlerTimeoutSecs: 20,
+
+      async requestHandler({ request, $, enqueueLinks, log }) {
+        if (shouldSkipUrl(request.url)) {
+          log.info(`Skipping low-value page: ${request.url}`);
+          return;
+        }
+
+        log.info(`Scraping: ${request.url}`);
+
+        await enqueueLinks({
+          strategy: "same-domain",
+          transformRequestFunction: (req) => {
+            try {
+              const u = new URL(req.url);
+              if (u.hostname !== startHostname) return false;
+              if (shouldSkipUrl(u.toString())) return false;
+              u.hash = "";
+              req.url = u.toString();
+              return req;
+            } catch {
+              return false;
+            }
+          },
+        }).catch((err) => log.warning(`Link enqueueing notice: ${err.message}`));
+
+        if (isBlogListingPage(request.url)) {
+          log.info(`Crawled for links only (listing page): ${request.url}`);
+          return;
+        }
+
+        const { title, blocks: rawBlocks } = extractText($);
+
+        const rawTotalLength = rawBlocks.reduce((sum, b) => sum + b.text.length, 0);
+        if (rawTotalLength < 50) {
+          log.info(`Skipping page with insufficient content (${rawTotalLength} chars): ${request.url}`);
+          return;
+        }
+
+        const blocks = rawBlocks.filter((b) => {
+          if (b.text.length < BLOCK_DEDUP_MIN_LENGTH) return true;
+          const norm = normalizeText(b.text);
+          if (seenBlockText.has(norm)) return false;
+          seenBlockText.add(norm);
+          return true;
+        });
+
+        const chunks = chunkText(blocks);
+        log.info(`${chunks.length} chunks extracted from "${title}"`);
+
+        if (chunks.length > 0) {
+          pages.set(request.url, { url: request.url, title, chunks });
+        }
+      },
+
+      failedRequestHandler({ request, log }, error) {
+        log.warning(`Failed: ${request.url} — ${error.message}`);
+      },
+    });
+  }
 
   try {
     await crawler.run();

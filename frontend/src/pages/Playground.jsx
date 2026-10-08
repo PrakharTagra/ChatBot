@@ -22,6 +22,41 @@ import {
 import { RENDER_API, getChatbotConfig, saveChatbotConfig, getScrapedSites } from '../config'
 import './Playground.css'
 
+function formatDisplayName(raw) {
+  if (!raw) return 'Assistant'
+  let name = raw
+    .replace(/\.(com|org|net|app|io|dev|in|co|tech)$/i, '')
+    .replace(/[-_](com|org|net|app|io|dev|in|co|tech|vercel)$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+  name = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\b([a-z])(\d+)([a-z]?)\b/gi, (m, p1, p2, p3) => p1.toUpperCase() + p2 + (p3 || '').toUpperCase())
+  return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+function renderFormattedMessage(text) {
+  if (!text) return null
+  const lines = text.split('\n')
+  return lines.map((line, idx) => {
+    const parts = line.split(/(\*\*[^*]+\*\*)/g)
+    const content = parts.map((part, pIdx) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={pIdx}>{part.slice(2, -2)}</strong>
+      }
+      return part
+    })
+
+    const isBullet = line.trim().startsWith('•')
+
+    return (
+      <div key={idx} style={{ marginBottom: isBullet ? '6px' : (line.trim() === '' ? '8px' : '2px') }}>
+        {content}
+      </div>
+    )
+  })
+}
+
 export default function Playground() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -76,11 +111,11 @@ export default function Playground() {
           const cfg = getChatbotConfig(s.websiteId)
           return {
             websiteId: s.websiteId,
-            name: cfg.title || s.websiteId,
+            name: cfg.title || formatDisplayName(s.websiteId),
             url: s.url || `https://${s.websiteId}.com`,
             chunks: s.chunks ?? 0,
             lastSync: s.lastScraped || null,
-            description: `Knowledge base for ${s.websiteId}`,
+            description: `Knowledge base for ${formatDisplayName(s.websiteId)}`,
             sampleQuestions: [
               'What core services or products are offered?',
               'How can I get in touch with your team?',
@@ -92,11 +127,11 @@ export default function Playground() {
 
         const localSites = getScrapedSites().map(s => ({
           websiteId: s.websiteId,
-          name: s.name || s.websiteId,
+          name: s.name || formatDisplayName(s.websiteId),
           url: s.url || `https://${s.websiteId}.com`,
           chunks: s.chunks ?? 0,
           lastSync: s.lastSync || null,
-          description: s.description || `Knowledge base for ${s.websiteId}`,
+          description: s.description || `Knowledge base for ${formatDisplayName(s.websiteId)}`,
           sampleQuestions: [
             'What core services or products are offered?',
             'How can I get in touch with your team?',
@@ -477,7 +512,7 @@ export default function Playground() {
                     className="msg-bubble"
                     style={m.role === 'user' ? { backgroundColor: primaryColor, color: '#ffffff' } : {}}
                   >
-                    <p className="msg-text">{m.text}</p>
+                    <div className="msg-text">{renderFormattedMessage(m.text)}</div>
 
                     {m.source && (
                       <div className="source-citation">

@@ -53,7 +53,7 @@ router.post("/", async (req, res) => {
   }
 
   const trimmed = message.trim();
-  const siteName = websiteName || websiteId;
+  let siteName = formatSiteName(websiteId, websiteName);
 
   if (GREETING_RE.test(trimmed) || SMALL_TALK_RE.test(trimmed)) {
     return res.json({
@@ -95,6 +95,58 @@ router.post("/", async (req, res) => {
         source: null,
         confident: true,
       });
+    }
+
+    // Refine siteName from real scraped page titles if available
+    siteName = formatSiteName(websiteId, websiteName, ranked.map(r => r.title));
+
+    // Handle high-intent queries: Contact, About Us, Pricing
+    const isContactQuery = /contact|get in touch|reach (out|you|team)|email|phone|call (us|you)|speak to|talk to|office|address|location|support/i.test(trimmed);
+    const isAboutQuery = /tell me (more )?about|who (are|is)|what is|company overview|background|about us/i.test(trimmed);
+    const isPricingQuery = /price|pricing|cost|rate|fee|retainer|package|hourly|model/i.test(trimmed);
+
+    if (isContactQuery) {
+      const contactIdx = ranked.findIndex(r =>
+        r.content.includes("Contact Email:") ||
+        r.content.includes("@") ||
+        /\+?[0-9][0-9\s\-()]{7,16}[0-9]/.test(r.content) ||
+        r.url.includes("contact")
+      );
+      if (contactIdx > 0) {
+        const contactChunk = ranked.splice(contactIdx, 1)[0];
+        ranked.unshift(contactChunk);
+      } else if (contactIdx === -1) {
+        try {
+          const contactEmbedding = await getEmbedding("contact details email phone address get in touch");
+          const contactResults = await queryChroma(websiteId, contactEmbedding, 3);
+          const found = contactResults.find(r => r.content.includes("@") || r.content.includes("Contact Details:"));
+          if (found) ranked.unshift(found);
+        } catch {}
+      }
+    } else if (isPricingQuery) {
+      const pricingIdx = ranked.findIndex(r => {
+        const text = r.content.toLowerCase();
+        return text.includes("pricing and engagement") ||
+               text.includes("engagement model") ||
+               text.includes("time-and-materials") ||
+               text.includes("fixed-scope") ||
+               text.includes("fixed-bid") ||
+               text.includes("rates");
+      });
+      if (pricingIdx > 0) {
+        const pricingChunk = ranked.splice(pricingIdx, 1)[0];
+        ranked.unshift(pricingChunk);
+      }
+    } else if (isAboutQuery) {
+      const aboutIdx = ranked.findIndex(r =>
+        r.url.endsWith("/") ||
+        r.url.includes("about") ||
+        r.url.includes("overview")
+      );
+      if (aboutIdx > 0) {
+        const aboutChunk = ranked.splice(aboutIdx, 1)[0];
+        ranked.unshift(aboutChunk);
+      }
     }
 
     const topScore = ranked[0].score;
@@ -181,7 +233,7 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
     if (relevantChunks.length > 0 || ranked.length > 0) {
       const best = relevantChunks[0] || ranked[0];
       return res.json({
-        answer: formatIntoPointers(best.content, trimmed, siteName),
+        answer: formatIntoPointers(best.content, trimmed, siteName, best.url),
         source: best.url,
         confident: true,
       });
@@ -196,82 +248,144 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
   }
 });
 
+function formatSiteName(siteId, siteName, sampleTitles = []) {
+  if (siteName && siteName !== siteId && !siteName.includes(".com") && !siteName.includes("-com")) {
+    return siteName;
+  }
+  for (const t of sampleTitles) {
+    if (!t) continue;
+    const dashMatch = t.match(/[-–]\s*([^–-]+)$/);
+    if (dashMatch && dashMatch[1]) {
+      const cand = dashMatch[1].trim();
+      if (cand.length >= 3 && cand.length <= 30 && !/menu|page|nav|blog/i.test(cand)) {
+        return cand;
+      }
+    }
+    const pipeMatch = t.match(/^([^|]+)\s*\|/);
+    if (pipeMatch && pipeMatch[1]) {
+      const cand = pipeMatch[1].replace(/^(life at|about|welcome to)\s+/i, '').trim();
+      if (cand.length >= 3 && cand.length <= 30) {
+        return cand;
+      }
+    }
+  }
+  let name = (siteId || "Assistant")
+    .replace(/\.(com|org|net|app|io|dev|in|co|tech)$/i, "")
+    .replace(/[-_](com|org|net|app|io|dev|in|co|tech|vercel)$/i, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+  name = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\b([a-z])(\d+)([a-z]?)\b/gi, (m, p1, p2, p3) => p1.toUpperCase() + p2 + (p3 || "").toUpperCase());
+  return name
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function cleanFaqTitle(raw) {
+  let clean = raw.trim()
+    .replace(/Frequently Asked Questions\s*/i, "")
+    .replace(/^(what|how much|how|where|when|can|do|does|is|are|why|which)\s+(does|much|is)?\s*/i, "")
+    .replace(/\s+(do you support|differ from fixed-bid|differ|can i find|is offered|are offered|cost)\??$/i, "")
+    .replace(/\?+$/, "")
+    .trim();
+  if (/pricing and engagement/i.test(clean)) return "Pricing & Engagement Models";
+  if (/hourly model/i.test(clean)) return "Hourly vs Fixed-Bid Model";
+  if (/manual testing/i.test(clean)) return "Manual Testing Cost & Rates";
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
 function stripMarkdown(text) {
   return text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
     .replace(/^#{1,6}\s+/gm, "")
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")
-    .replace(/(\*|_)(.*?)\1/g, "$2")
     .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")
     .replace(/^\s*[-*+]\s+/gm, "• ")
-    .replace(/^\s*\d+\.\s+/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-function formatIntoPointers(rawContent, userQuestion, siteName) {
+function formatIntoPointers(rawContent, userQuestion, siteName, chunkUrl = "") {
   if (!rawContent) return `No specific details found for ${siteName}.`;
 
   const q = (userQuestion || "").toLowerCase();
+  const isContact = /contact|touch|reach|email|phone|call|address|location|support|talk/i.test(q);
+  const isAbout = /who|about|company|background|mission|tell me (more )?about/i.test(q);
+  const isPricing = /price|pricing|cost|rate|fee|retainer|package|hourly|model/i.test(q);
+  const isServices = /service|product|offering|solution|what (do you|they) (do|provide|offer)/i.test(q);
 
-  // 1. Contextual opening sentence directly addressing the user question
   let intro = `Here are the key details for ${siteName}:`;
-  if (/service|product|offering|solution|what (do you|they) (do|provide|offer)/i.test(q)) {
-    intro = `Here are the core services and solutions offered by ${siteName}:`;
-  } else if (/price|pricing|cost|rate|fee|retainer|package|hourly|model/i.test(q)) {
-    intro = `Here are the pricing and engagement models supported by ${siteName}:`;
-  } else if (/contact|email|phone|reach|touch|call|support|talk/i.test(q)) {
-    intro = `Here are the contact and support details for ${siteName}:`;
-  } else if (/who|about|company|background|mission/i.test(q)) {
-    intro = `Here is an overview of ${siteName}:`;
-  } else if (/tech|technology|stack|framework|language|tool/i.test(q)) {
-    intro = `Here are the technologies utilized by ${siteName}:`;
+  if (isServices) intro = `Here are the core services and solutions offered by ${siteName}:`;
+  else if (isPricing) intro = `Here are the pricing and engagement models supported by ${siteName}:`;
+  else if (isContact) intro = `Here are the contact and support details for ${siteName}:`;
+  else if (isAbout) intro = `Here is an overview of ${siteName}:`;
+
+  // Contact extractor
+  if (isContact) {
+    const emailMatch = rawContent.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const phoneMatches = [...rawContent.matchAll(/(?:Contact\s*Phone:?\s*|\bPhone:?\s*)(\+?[0-9][0-9\s\-()]{7,16}[0-9])/gi)].map(m => m[1].trim());
+    const addrMatch = rawContent.match(/(?:Address:?|Location:?)\s*([^\n\r]+)/i) || rawContent.match(/(B03[^\n\r]+)/);
+
+    if (emailMatch || phoneMatches.length > 0) {
+      const bullets = [];
+      if (emailMatch) bullets.push(`• **Email**: ${emailMatch[0]}`);
+      if (phoneMatches.length > 0) {
+        const uniquePhones = [...new Set(phoneMatches)];
+        bullets.push(`• **Phone**: ${uniquePhones.join(" / ")}`);
+      }
+      if (addrMatch) {
+        bullets.push(`• **Office Location**: ${addrMatch[1].trim()}`);
+      }
+      bullets.push(`• **Online Consultation**: You can leave your details in this chat and our team will get back to you shortly.`);
+      return `${intro}\n\n${bullets.join("\n\n")}`;
+    }
   }
 
-  // 2. Remove website boilerplate noise, dangling navigation tags, button labels
   let cleaned = rawContent
-    .replace(/\b(Talk to Our Experts|Book a call|Contact Us|Read More|Get in touch|AWS Vue\.js|View All|Home > [^.\n]+)\b/gi, '')
-    .replace(/Source:\s*\[[^\]]+\]\([^)]+\)/gi, '')
-    .replace(/\s+/g, ' ')
+    .replace(/\b(Talk to Our Experts|Book a call|Contact Us|Read More|Get in touch|AWS Vue\.js|View All|Home > [^.\n]+)\b/gi, "")
+    .replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s*\(\d+\)/gi, "")
+    .replace(/Tags\s+[A-Za-z0-9\s]+(?=Add to Preferred|Frequently Asked|\.|$)/gi, "")
+    .replace(/Add to Preferred Sources/gi, "")
+    .replace(/First Name \* Last Name \* Email Address \* Write Your Message \* protected by reCAPTCHA Submit/gi, "")
+    .replace(/Source:\s*\[[^\]]+\]\([^)]+\)/gi, "")
+    .replace(/\s+/g, " ")
     .trim();
 
   const pointers = [];
 
-  // 3. Check for Q&A FAQ pattern: questions followed by answers
-  const qMatches = cleaned.split('?');
+  // Q&A FAQ pattern
+  const qMatches = cleaned.split("?");
   if (qMatches.length >= 2) {
     for (let i = 0; i < qMatches.length - 1; i++) {
-      const prevSentences = qMatches[i].split('. ');
+      const prevSentences = qMatches[i].split(". ");
       const qSentence = prevSentences[prevSentences.length - 1].trim();
 
       const nextRaw = qMatches[i + 1].trim();
-      const nextSentences = nextRaw.split('. ');
-      const answerSentences = nextSentences.filter(s => !s.endsWith('?') && s.length > 10);
-      const answerText = answerSentences.slice(0, 2).join('. ') + (answerSentences.length > 0 ? '.' : '');
+      const nextSentences = nextRaw.split(". ");
+      const answerSentences = nextSentences.filter(s => !s.endsWith("?") && s.length > 10);
+      const answerText = answerSentences.slice(0, 2).join(". ") + (answerSentences.length > 0 ? "." : "");
 
-      if (qSentence.length >= 10 && answerText.length >= 15) {
-        const cleanQ = qSentence.replace(/^(what|how|where|when|can|do|does|is|are)\s+/i, '').trim();
-        const topic = cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1);
+      if (qSentence.length >= 8 && answerText.length >= 15) {
+        const topic = cleanFaqTitle(qSentence);
         pointers.push(`• **${topic}**: ${answerText}`);
       }
     }
   }
 
-  // 4. Check for distinct feature/offering labels
+  // Feature labels pattern
   if (pointers.length === 0) {
     const knownLabels = [
-      'SaaS Applications', 'Enterprise Web Apps', 'CRM / ERP Systems', 'Marketplace Development',
-      'Web Application Development', 'Cloud Migration', 'AI / ML', 'Mobile Development',
-      'Time-and-materials', 'Fixed-price', 'Fixed-bid', 'Dedicated team', 'Retainer', 'Full-Stack'
+      "SaaS Applications", "Enterprise Web Apps", "CRM / ERP Systems", "Marketplace Development",
+      "Web Application Development", "Cloud Migration", "AI / ML", "Mobile Development",
+      "Time-and-materials", "Fixed-price", "Fixed-bid", "Dedicated team", "Retainer", "Full-Stack"
     ];
 
     let foundLabels = [];
     for (const label of knownLabels) {
       const idx = cleaned.indexOf(label);
-      if (idx !== -1) {
-        foundLabels.push({ label, idx });
-      }
+      if (idx !== -1) foundLabels.push({ label, idx });
     }
     foundLabels.sort((a, b) => a.idx - b.idx);
 
@@ -280,7 +394,7 @@ function formatIntoPointers(rawContent, userQuestion, siteName) {
         const cur = foundLabels[i];
         const nextIdx = (i + 1 < foundLabels.length) ? foundLabels[i + 1].idx : Math.min(cleaned.length, cur.idx + 300);
         const segment = cleaned.slice(cur.idx + cur.label.length, nextIdx).trim();
-        const desc = segment.replace(/^[:\-–—\s]+/, '').trim();
+        const desc = segment.replace(/^[:\-–—\s]+/, "").trim();
         if (desc.length > 15) {
           pointers.push(`• **${cur.label}**: ${desc}`);
         }
@@ -288,11 +402,19 @@ function formatIntoPointers(rawContent, userQuestion, siteName) {
     }
   }
 
-  // 5. Fallback sentence parser: convert key sentences into distinct bullet points
+  // Clean sentence fallback
   if (pointers.length === 0) {
-    const sentences = cleaned.split(/(?<=[.?!])\s+/).filter(s => s.trim().length >= 20);
-    for (const s of sentences.slice(0, 5)) {
-      const colonIdx = s.indexOf(':');
+    const sentences = cleaned.split(/(?<=[.?!])\s+/).filter(s => {
+      const t = s.trim();
+      if (t.length < 25) return false;
+      if (/^[a-z]/.test(t)) return false;
+      if (/^(with|and|but|or|so|because|to|for|in|on|at|by|from|as|if|when|while|that|which|where)\b/i.test(t)) return false;
+      if (/^(AWS|Azure|Google Cloud|Kubernetes|Docker|GitHub Actions|Selenium|Playwright)/i.test(t)) return false;
+      return true;
+    });
+
+    for (const s of sentences.slice(0, 4)) {
+      const colonIdx = s.indexOf(":");
       if (colonIdx > 3 && colonIdx < 35) {
         const title = s.slice(0, colonIdx).trim();
         const body = s.slice(colonIdx + 1).trim();
@@ -303,7 +425,11 @@ function formatIntoPointers(rawContent, userQuestion, siteName) {
     }
   }
 
-  return `${intro}\n\n${pointers.join('\n\n')}`;
+  if (pointers.length === 0) {
+    return `${intro} Please visit our official pages or leave your contact details below to learn more.`;
+  }
+
+  return `${intro}\n\n${pointers.join("\n\n")}`;
 }
 
-export default router;
+export default router;

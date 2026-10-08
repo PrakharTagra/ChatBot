@@ -519,10 +519,23 @@
         scrollToBottom();
       }
 
+      function renderMarkdownHTML(raw) {
+        if (!raw) return "";
+        const escaped = raw
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        return escaped
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/\n/g, "<br>");
+      }
+
       function appendBotMessage(text, source) {
         const wrap = el("div", "cw-msg");
         const bubble = el("div", "cw-bubble cw-bubble-bot");
-        bubble.textContent = text;
+        const textDiv = el("div", "");
+        textDiv.innerHTML = renderMarkdownHTML(text);
+        bubble.appendChild(textDiv);
 
         if (source) {
           try {

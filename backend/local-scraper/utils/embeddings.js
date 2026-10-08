@@ -1,4 +1,8 @@
-import { pipeline } from "@xenova/transformers";
+import { pipeline, env } from "@xenova/transformers";
+import os from "os";
+import path from "path";
+
+env.cacheDir = path.join(os.tmpdir(), ".transformers_cache");
 
 let embedder = null;
 
