@@ -61,11 +61,49 @@ function isBlogListingPage(url) {
 }
 
 function extractText($) {
-  // 1. Remove non-content elements
-  $("script, style, noscript, iframe, svg, canvas").remove();
+  // 1. Remove non-content elements and navigation / boilerplate
+  $("script, style, noscript, iframe, svg, canvas, nav, footer, header, aside").remove();
   $('[aria-hidden="true"], .sr-only, .visually-hidden, .visuallyhidden').remove();
 
-  const title = $("title").text().replace(/\s+/g, " ").trim() || $("h1").first().text().replace(/\s+/g, " ").trim() || "Website Page";
+  // Wikipedia and general wiki/doc noise
+  $(
+    ".reference, .reflist, ol.references, sup.reference, .citation, .mw-cite-backlink, cite, " +
+    ".navbox, .vertical-navbox, .sidebar, .catlinks, .printfooter, .mw-footer, .mw-indicators, .noprint, " +
+    ".mw-editsection, .mw-jump-link, #mw-navigation, #siteSub, #contentSub, .toctitle, #toc, .mw-toc, " +
+    ".vector-header, .vector-dropdown, .vector-menu, #vector-page-tools-dropdown, .mw-portlet, " +
+    ".mw-cite-citations, #References, #See_also, #External_links, #Further_reading, #Notes, #Bibliography"
+  ).remove();
+
+  // Common web boilerplate & popups
+  $(
+    ".cookie-consent, .cookie-banner, .cookie-notice, #cookie-notice, .modal, .popup, " +
+    ".social-share, .share-buttons, .share-bar, #comments, .comments, .comment-list"
+  ).remove();
+
+  // Remove reference/bibliography/links sections
+  $("h2, h3, h4").each((_, heading) => {
+    const text = $(heading).text().toLowerCase().trim();
+    if (
+      text.includes("reference") ||
+      text.includes("see also") ||
+      text.includes("external link") ||
+      text.includes("further reading") ||
+      text.includes("bibliography") ||
+      text.includes("notes") ||
+      text.includes("sources")
+    ) {
+      const section = $(heading).closest("section");
+      if (section.length > 0) {
+        section.remove();
+      } else {
+        $(heading).nextUntil("h2").remove();
+        $(heading).remove();
+      }
+    }
+  });
+
+  const rawTitle = $("h1#firstHeading").text().trim() || $("title").text().trim() || $("h1").first().text().trim() || "Website Page";
+  const title = rawTitle.replace(/\s*[-–|]\s*(Wikipedia|Official Website|Home|About Us).*$/i, "").replace(/\s+/g, " ").trim() || rawTitle;
   const metaDesc = $('meta[name="description"]').attr("content") || $('meta[property="og:description"]').attr("content") || "";
 
   // 2. Extract explicit contact & profile targets
@@ -107,7 +145,7 @@ function extractText($) {
   $("li").each((_, el) => {
     $(el).prepend("• ");
   });
-  $("h1, h2, h3, h4, h5, h6, p, div, li, tr, blockquote, section, article, header, footer, aside, dl, dt, dd").each((_, el) => {
+  $("h1, h2, h3, h4, h5, h6, p, div, li, tr, blockquote, section, article, dl, dt, dd").each((_, el) => {
     $(el).append("\n");
   });
   $("span, a, b, strong, em, i, td, th").each((_, el) => {
@@ -139,8 +177,24 @@ function extractText($) {
   let currentHeading = null;
   const seenLines = new Set();
 
-  for (const line of rawLines) {
+  for (let line of rawLines) {
     if (line.length < 2) continue;
+
+    // Filter out citation/footnote/navigation noise
+    if (/^[•\s*–\-↑]*\^?[↑^]/.test(line)) continue;
+    if (/^(Toggle|Jump to content|Main menu|move to sidebar|hide Navigation|Coordinates\s*:|ISBN\s+|OCLC\s+|Archived from the original|Retrieved\s+[A-Z]|Dansk|Wikimedia Commons|Wikidata item)/i.test(line)) continue;
+    if (/\(links\s*\|\s*edit\s*\)/i.test(line)) continue;
+    if (/^(Unit actions from|pp?\. \d+|[A-Z][a-z]+, pp?\. \d+)/i.test(line)) continue;
+    if (/^(\[edit\]|edit)$/i.test(line)) continue;
+    if (/^\{\{[^}]+\}\}$/.test(line)) continue;
+
+    // Clean redundant nested bullets, wiki templates, and [edit] tags
+    line = line
+      .replace(/^[•\s*–\-]+\s*•\s*/, "• ")
+      .replace(/\[\s*edit\s*\]/gi, "")
+      .replace(/\{\{[^}]+\}\}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
 
     // Detect section heading boundaries
     const isHeading = line.length < 80 && (/^[A-Z0-9\s#\-–—:★•]+$/.test(line) || /^(About|Services|Products|Experience|Projects|Track Record|Academics|Skills|Education|Contact|Overview|Features|Pricing|FAQ|Team|Blog)/i.test(line));

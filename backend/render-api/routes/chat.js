@@ -15,22 +15,64 @@ const CANDIDATE_MODELS = [
   "llama-3.1-8b-instant",
 ].filter(Boolean);
 
+async function generateWithGemini(messages, maxTokens = 800) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  const sysMsg = messages.find((m) => m.role === "system")?.content || "";
+  const userHistory = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n\n");
+  const prompt = sysMsg ? `${sysMsg}\n\n${userHistory}` : userHistory;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: maxTokens },
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Gemini API returned status ${res.status}`);
+  }
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Empty response from Gemini");
+  return text;
+}
+
 async function createChatCompletionWithFallback(groqClient, messages, maxTokens = 800) {
-  let lastError = null;
-  for (const model of CANDIDATE_MODELS) {
-    try {
-      const completion = await groqClient.chat.completions.create({
-        model,
-        max_tokens: maxTokens,
-        messages,
-      });
-      return completion;
-    } catch (err) {
-      lastError = err;
-      console.warn(`Groq model "${model}" failed (${err.message}), trying next...`);
+  if (process.env.GROQ_API_KEY && !process.env.GROQ_API_KEY.includes("xxx")) {
+    for (const model of CANDIDATE_MODELS) {
+      try {
+        const completion = await groqClient.chat.completions.create({
+          model,
+          max_tokens: maxTokens,
+          messages,
+        });
+        const text = completion.choices[0]?.message?.content;
+        if (text) return text;
+      } catch (err) {
+        console.warn(`Groq model "${model}" failed (${err.message}), trying next...`);
+        if (err.status === 401) break; // Invalid API key, do not retry other models on Groq
+      }
     }
   }
-  throw lastError;
+
+  // Fallback to Gemini if configured
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const geminiText = await generateWithGemini(messages, maxTokens);
+      if (geminiText) return geminiText;
+    } catch (err) {
+      console.warn("Gemini generation failed:", err.message);
+    }
+  }
+
+  throw new Error("No active LLM providers succeeded");
 }
 
 const SIMILARITY_THRESHOLD = 0.22;
@@ -44,6 +86,16 @@ const SMALL_TALK_RE = /^(how are you|how do you do|nice to meet|thanks|thank you
 const HUMAN_HANDOFF_RE = /\b(talk to (a human|a person|a representative|someone from the team|sales)|speak (to|with) (a human|a person|a representative)|call me back|request a call|book a call|schedule a consultation|schedule a call)\b/i;
 
 const LINK_REQUEST_RE = /\b(link|url|web ?page|source|page (link|url)|where can i (read|see|find)|send (me )?the link|share the link|give me the link)\b/i;
+
+function isNoiseChunk(content) {
+  if (!content || content.length < 20) return true;
+  if (/^[•\s*–\-↑^]*\^?[↑^]/.test(content)) return true;
+  if (/\b(Unit actions from|Archived from the original|Retrieved [A-Za-z]+ \d+|ISBN \d+|OCLC \d+)/i.test(content) && !content.includes("was fought") && !content.includes("battle")) {
+    return true;
+  }
+  if (/\(links\s*\|\s*edit\s*\)/i.test(content)) return true;
+  return false;
+}
 
 router.post("/", async (req, res) => {
   const { message, websiteId, history = [], websiteName } = req.body;
@@ -84,6 +136,10 @@ router.post("/", async (req, res) => {
     const contextualQuery = recentUserContext ? `${recentUserContext} ${trimmed}` : trimmed;
     const queryEmbedding = await getEmbedding(contextualQuery);
     ranked = await queryChroma(websiteId, queryEmbedding, TOP_K);
+    const nonNoise = ranked.filter((r) => !isNoiseChunk(r.content));
+    if (nonNoise.length > 0) {
+      ranked = nonNoise;
+    }
     console.log("TOP RESULTS:", ranked.map(r => ({
       score: r.score.toFixed(3),
       snippet: r.content.slice(0, 80)
@@ -187,7 +243,7 @@ No relevant content was found for this question.
 Write ONE short plain sentence only: say ${siteName} couldn't find that information but can connect them with someone from the team if they leave their details.
 No markdown, no links — just the plain sentence. Refer to the organisation as "${siteName}", never as "the website".`;
 
-    const completion = await createChatCompletionWithFallback(
+    const rawCompletion = await createChatCompletionWithFallback(
       getGroq(),
       [
         { role: "system", content: systemPrompt },
@@ -196,8 +252,6 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
       ],
       800
     );
-
-    const rawCompletion = completion.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
 
     const citedMatch = rawCompletion.match(/CITED_SOURCE:\s*(\d+)\s*$/i);
     const citedIndex = citedMatch ? parseInt(citedMatch[1], 10) - 1 : -1;
@@ -249,31 +303,29 @@ No markdown, no links — just the plain sentence. Refer to the organisation as 
 });
 
 function formatSiteName(siteId, siteName, sampleTitles = []) {
-  if (siteName && siteName !== siteId && !siteName.includes(".com") && !siteName.includes("-com")) {
-    return siteName;
-  }
   for (const t of sampleTitles) {
     if (!t) continue;
-    const dashMatch = t.match(/[-–]\s*([^–-]+)$/);
-    if (dashMatch && dashMatch[1]) {
-      const cand = dashMatch[1].trim();
-      if (cand.length >= 3 && cand.length <= 30 && !/menu|page|nav|blog/i.test(cand)) {
-        return cand;
-      }
-    }
-    const pipeMatch = t.match(/^([^|]+)\s*\|/);
-    if (pipeMatch && pipeMatch[1]) {
-      const cand = pipeMatch[1].replace(/^(life at|about|welcome to)\s+/i, '').trim();
-      if (cand.length >= 3 && cand.length <= 30) {
-        return cand;
-      }
+    const cleaned = t.replace(/\s*[-–|]\s*(Wikipedia|Official Website|Home|About Us).*$/i, "").trim();
+    if (cleaned.length >= 3 && cleaned.length <= 60 && !/menu|page|nav|blog/i.test(cleaned)) {
+      return cleaned;
     }
   }
+
+  if (siteName && siteName !== siteId && !siteName.includes(".com") && !siteName.includes("-com") && !siteName.includes("-org") && !/^[a-z0-9-]+ assistant$/i.test(siteName)) {
+    return siteName.replace(/\s*Assistant$/i, "").trim() || siteName;
+  }
+
   let name = (siteId || "Assistant")
+    .replace(/^site-/i, "")
     .replace(/\.(com|org|net|app|io|dev|in|co|tech)$/i, "")
     .replace(/[-_](com|org|net|app|io|dev|in|co|tech|vercel)$/i, "")
     .replace(/[-_]+/g, " ")
     .trim();
+
+  if (/^en wikipedia org wiki /i.test(name)) {
+    name = name.replace(/^en wikipedia org wiki /i, "");
+  }
+
   name = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/\b([a-z])(\d+)([a-z]?)\b/gi, (m, p1, p2, p3) => p1.toUpperCase() + p2 + (p3 || "").toUpperCase());
@@ -311,8 +363,10 @@ function formatIntoPointers(rawContent, userQuestion, siteName, chunkUrl = "") {
   if (!rawContent) return `No specific details found for ${siteName}.`;
 
   const q = (userQuestion || "").toLowerCase();
+  const qWords = q.split(/\s+/).filter(w => w.length > 2 && !["what", "when", "where", "which", "who", "whom", "this", "that", "the", "and", "are", "tell", "about", "your", "name"].includes(w));
+
   const isContact = /contact|touch|reach|email|phone|call|address|location|support|talk/i.test(q);
-  const isAbout = /who|about|company|background|mission|tell me (more )?about/i.test(q);
+  const isAbout = /who|about|company|background|mission|overview|history|tell me (more )?about/i.test(q);
   const isPricing = /price|pricing|cost|rate|fee|retainer|package|hourly|model/i.test(q);
   const isServices = /service|product|offering|solution|what (do you|they) (do|provide|offer)/i.test(q);
 
@@ -332,8 +386,7 @@ function formatIntoPointers(rawContent, userQuestion, siteName, chunkUrl = "") {
       const bullets = [];
       if (emailMatch) bullets.push(`• **Email**: ${emailMatch[0]}`);
       if (phoneMatches.length > 0) {
-        const uniquePhones = [...new Set(phoneMatches)];
-        bullets.push(`• **Phone**: ${uniquePhones.join(" / ")}`);
+        bullets.push(`• **Phone**: ${[...new Set(phoneMatches)].join(" / ")}`);
       }
       if (addrMatch) {
         bullets.push(`• **Office Location**: ${addrMatch[1].trim()}`);
@@ -343,7 +396,14 @@ function formatIntoPointers(rawContent, userQuestion, siteName, chunkUrl = "") {
     }
   }
 
+  // Deep cleaning: remove footnotes, citations, numbers, wiki boilerplate
   let cleaned = rawContent
+    .replace(/[•\s*–\-↑]*\^?[↑^][^\n.]*(\.|\n|$)/g, " ")
+    .replace(/\[\s*\d+\s*\]/g, "")
+    .replace(/\[\s*edit\s*\]/gi, "")
+    .replace(/\{\{[^}]+\}\}/g, "")
+    .replace(/\b(Unit actions from|pp?\. \d+|[A-Z][a-z]+, pp?\. \d+|Archived from the original|Retrieved [A-Za-z]+ \d+|ISBN|OCLC|Breiner, Battle)[^\n.]*(\.|\n|$)/gi, " ")
+    .replace(/\(links\s*\|\s*edit\s*\)/gi, "")
     .replace(/\b(Talk to Our Experts|Book a call|Contact Us|Read More|Get in touch|AWS Vue\.js|View All|Home > [^.\n]+)\b/gi, "")
     .replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s*\(\d+\)/gi, "")
     .replace(/Tags\s+[A-Za-z0-9\s]+(?=Add to Preferred|Frequently Asked|\.|$)/gi, "")
@@ -402,25 +462,40 @@ function formatIntoPointers(rawContent, userQuestion, siteName, chunkUrl = "") {
     }
   }
 
-  // Clean sentence fallback
+  // Sentence ranker pattern: prioritize sentences containing user's query keywords
   if (pointers.length === 0) {
-    const sentences = cleaned.split(/(?<=[.?!])\s+/).filter(s => {
-      const t = s.trim();
-      if (t.length < 25) return false;
-      if (/^[a-z]/.test(t)) return false;
-      if (/^(with|and|but|or|so|because|to|for|in|on|at|by|from|as|if|when|while|that|which|where)\b/i.test(t)) return false;
-      if (/^(AWS|Azure|Google Cloud|Kubernetes|Docker|GitHub Actions|Selenium|Playwright)/i.test(t)) return false;
-      return true;
-    });
+    const rawSentences = cleaned.split(/(?<=[.?!])\s+/);
+    const candidateSentences = [];
 
-    for (const s of sentences.slice(0, 4)) {
+    for (const s of rawSentences) {
+      let t = s.trim().replace(/^[•\s*–\-↑^]+/, "").trim();
+      if (t.length < 25) continue;
+      if (/^[a-z]/.test(t)) continue;
+      if (/^(with|and|but|or|so|because|to|for|in|on|at|by|from|as|if|when|while|that|which|where)\b/i.test(t)) continue;
+      if (/^(AWS|Azure|Google Cloud|Kubernetes|Docker|GitHub Actions|Selenium|Playwright)/i.test(t)) continue;
+      if (/^(Unit actions from|Archived from|Retrieved |Coordinates|ISBN|OCLC)/i.test(t)) continue;
+
+      let score = 0;
+      const lower = t.toLowerCase();
+      for (const w of qWords) {
+        if (lower.includes(w)) score += 2;
+      }
+      candidateSentences.push({ text: t, score });
+    }
+
+    // Sort by relevance to query
+    candidateSentences.sort((a, b) => b.score - a.score);
+
+    const chosen = candidateSentences.slice(0, 4);
+    for (const item of chosen) {
+      const s = item.text.replace(/\s+([,.:;?!])/g, "$1");
       const colonIdx = s.indexOf(":");
       if (colonIdx > 3 && colonIdx < 35) {
         const title = s.slice(0, colonIdx).trim();
         const body = s.slice(colonIdx + 1).trim();
         pointers.push(`• **${title}**: ${body}`);
       } else {
-        pointers.push(`• ${s.trim()}`);
+        pointers.push(`• ${s}`);
       }
     }
   }
