@@ -1,3 +1,4 @@
+import "./env-init.js";
 import os from "os";
 import path from "path";
 import fs from "fs";
@@ -10,8 +11,15 @@ const tempStorageDir = path.join(os.tmpdir(), "crawlee_storage");
 try {
   if (!fs.existsSync(tempStorageDir)) fs.mkdirSync(tempStorageDir, { recursive: true });
 } catch {}
+
+const crawleeConfig = new Configuration({
+  storageDir: tempStorageDir,
+  purgeOnStart: true,
+  persistStorage: false,
+});
 Configuration.getGlobalConfig().set("storageDir", tempStorageDir);
 Configuration.getGlobalConfig().set("purgeOnStart", true);
+Configuration.getGlobalConfig().set("persistStorage", false);
 
 function canUsePlaywright() {
   if (process.env.FORCE_CHEERIO === "true" || process.env.VERCEL) return false;
@@ -234,7 +242,7 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
 
   // Create isolated fresh request queue for this crawl to prevent any cache pollution
   const queueId = `queue-${websiteId.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
-  const requestQueue = await RequestQueue.open(queueId);
+  const requestQueue = await RequestQueue.open(queueId, { config: crawleeConfig });
   await requestQueue.addRequest({ url: startUrl });
 
   const usePlaywright = canUsePlaywright();
@@ -324,7 +332,7 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
       failedRequestHandler({ request, log }, error) {
         log.warning(`Failed: ${request.url} — ${error.message}`);
       },
-    });
+    }, crawleeConfig);
   } else {
     crawler = new CheerioCrawler({
       requestQueue,
@@ -388,7 +396,7 @@ export async function scrapeAndIndex(startUrl, websiteId, mongoUri) {
       failedRequestHandler({ request, log }, error) {
         log.warning(`Failed: ${request.url} — ${error.message}`);
       },
-    });
+    }, crawleeConfig);
   }
 
   try {
