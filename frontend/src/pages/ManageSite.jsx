@@ -99,13 +99,14 @@ export default function ManageSite() {
     }
   }
 
+  const widgetOrigin = RENDER_API || (typeof window !== 'undefined' ? window.location.origin : '')
   const embedSnippet = `<!-- CogniSite Chatbot Widget -->
-<script src="${RENDER_API}/widget/chat-widget.js" defer></script>
+<script src="${widgetOrigin}/widget/chat-widget.js" defer></script>
 <script defer>
   document.addEventListener("DOMContentLoaded", function() {
     ChatWidget.init({
       websiteId: "${websiteId}",
-      apiUrl: "${RENDER_API}",
+      apiUrl: "${widgetOrigin}",
       title: "${title || `${websiteId} Assistant`}",
       welcomeMessage: "${welcomeMsg}",
       primaryColor: "${primaryColor}"${logoUrl.trim() ? `,\n      logoUrl: "${logoUrl.trim()}"` : ''}

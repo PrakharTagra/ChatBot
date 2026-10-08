@@ -1,8 +1,45 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "local-scraper": {
+      "root": "backend/local-scraper",
+      "framework": "express"
+    },
+    "chatbot-backend": {
+      "root": "backend/render-api",
+      "framework": "express",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "local-scraper",
+          "format": "url",
+          "env": "SCRAPER_SERVICE_URL"
+        }
+      ]
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite"
+    }
+  },
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "chatbot-backend"
+      }
+    },
+    {
+      "source": "/widget/(.*)",
+      "destination": {
+        "service": "chatbot-backend"
+      }
+    },
+    {
       "source": "/(.*)",
-      "destination": "/"
+      "destination": {
+        "service": "frontend"
+      }
     }
   ]
 }

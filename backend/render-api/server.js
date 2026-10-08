@@ -8,6 +8,7 @@ import chatRouter from "./routes/chat.js";
 import sitesRouter from "./routes/sites.js";
 import statsRouter from "./routes/stats.js";
 import leadsRouter from "./routes/leads.js";
+import scrapeRouter from "./routes/scrape.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -26,8 +27,11 @@ app.use("/api/chat", chatRouter);
 app.use("/api/sites", sitesRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/leads", leadsRouter);
+app.use("/api/scrape", scrapeRouter);
 
 app.get("/api/health", (req, res) => res.json({ status: "ok", role: "render-api" }));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Render API running on http://localhost:${PORT}`));
+
+export default app;
